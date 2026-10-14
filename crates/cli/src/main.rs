@@ -6,7 +6,7 @@
 //! lifeline plan -s gorkha.json                     # delivery plan as a table
 //! lifeline plan -s gorkha.json --json              # full plan for other tools
 //! lifeline wind --lat 28 --lon 84.63               # forecast wind profile
-//! lifeline flood -s gorkha.json [--date 2022-09-05] # detect new surface water
+//! lifeline flood -s gorkha.json [--date 2022-09-05] [--model m.onnx] # detect new surface water
 //! lifeline airdrop ...                             # airdrop physics tools
 //!
 //! Real areas download open data (elevation, OpenStreetMap, Sentinel-2,
@@ -17,7 +17,7 @@ mod airdrop;
 
 use clap::{Parser, Subcommand};
 use lifeline_airdrop::scenario::{self as drop, Scenario as DropScenario};
-use lifeline_geodata::{Area, Fetcher, WindProvider};
+use lifeline_geodata::{Area, Fetcher, WaterModel, WindProvider};
 use lifeline_planner::{plan, risk_layers, GeneratedSpec, Mode, PlanScenario, World, WorldSpec};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -98,6 +98,12 @@ enum Command {
         /// Review a past date (YYYY-MM-DD) instead of now
         #[arg(long)]
         date: Option<String>,
+        /// Learned water model (ONNX from ml/); defaults to $LIFELINE_WATER_MODEL or the data directory
+        #[arg(long)]
+        model: Option<PathBuf>,
+        /// Use the MNDWI index even when a model is available
+        #[arg(long, conflicts_with = "model")]
+        index: bool,
     },
     /// Airdrop physics: release point, dispersion, numerics, atmosphere
     Airdrop {
@@ -291,15 +297,26 @@ fn rpc() -> Result<serde_json::Value, String> {
                 1024,
             )?))
         }
+        "water_detectors" => json(serde_json::to_value(serde_json::json!({
+            "model": WaterModel::locate().map(|p| p.display().to_string()),
+            "expected_path": WaterModel::default_path().map(|p| p.display().to_string()),
+        }))),
         "detect_flooding" => {
             let area: Area = serde_json::from_value(arg("area")).map_err(|e| e.to_string())?;
             let world = build_world(&WorldSpec::Real(area.clone()))?;
             let as_of = req.args["asOf"].as_i64();
+            let model = match req.args["detector"].as_str() {
+                Some("model") => Some(WaterModel::load(
+                    &WaterModel::locate().ok_or("no water model configured")?,
+                )?),
+                _ => None,
+            };
             json(serde_json::to_value(lifeline_geodata::detect_new_water(
                 &fetcher()?,
                 &area,
                 &world.terrain,
                 as_of,
+                model.as_ref(),
             )?))
         }
         "default_scenario" => json(serde_json::to_value(DropScenario::default())),
@@ -349,7 +366,12 @@ fn run(cli: Cli) -> Result<(), String> {
             }
             Ok(())
         }
-        Command::Flood { scenario, date } => {
+        Command::Flood {
+            scenario,
+            date,
+            model,
+            index,
+        } => {
             let s = read_plan(&scenario)?;
             let WorldSpec::Real(area) = &s.world else {
                 return Err("flood detection needs a scenario on a real area".into());
@@ -362,7 +384,17 @@ fn run(cli: Cli) -> Result<(), String> {
                 ),
                 None => None,
             };
-            let w = lifeline_geodata::detect_new_water(&fetcher()?, area, &world.terrain, as_of)?;
+            let model = match model.or_else(WaterModel::locate) {
+                Some(path) if !index => Some(WaterModel::load(&path)?),
+                _ => None,
+            };
+            let w = lifeline_geodata::detect_new_water(
+                &fetcher()?,
+                area,
+                &world.terrain,
+                as_of,
+                model.as_ref(),
+            )?;
             let km2 = |f: f64| f * area.size_m * area.size_m / 1e6;
             println!("method        {}", w.method);
             println!(

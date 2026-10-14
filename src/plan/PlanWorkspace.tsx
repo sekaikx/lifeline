@@ -58,6 +58,14 @@ export function PlanWorkspace({
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("relief");
   const [imagery, setImagery] = useState<{ key: string; data: Imagery } | null>(null);
   const [flood, setFlood] = useState<string | null>(null);
+  const [waterModel, setWaterModel] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .waterDetectors()
+      .then((d) => setWaterModel(d.model))
+      .catch(() => setWaterModel(null));
+  }, []);
 
   const loadArea = useCallback((area: Area | null) => {
     setBusy(area ? `Loading ${area.name}…` : "Generating terrain…");
@@ -175,6 +183,7 @@ export function PlanWorkspace({
     busy,
     loadArea,
     floodSummary: flood,
+    waterModel,
     forecast: (provider, hours) => {
       if (!area) return;
       setBusy("Fetching forecast…");
@@ -189,15 +198,15 @@ export function PlanWorkspace({
         .catch((e) => setError(errorText(e)))
         .finally(() => setBusy(null));
     },
-    detectFlooding: (date) => {
+    detectFlooding: (date, detector) => {
       if (!area) return;
       setBusy("Analysing Sentinel-2…");
       const asOf = date ? Math.round(Date.parse(`${date}T12:00:00Z`) / 1000) : null;
       api
-        .detectFlooding(area, asOf)
+        .detectFlooding(area, asOf, detector)
         .then((d) => {
           const dates = [...new Set(d.scenes.map((x) => x.date))].join(", ");
-          setFlood(floodSummary(d.new_water_fraction, d.obscured_fraction, d.scenes));
+          setFlood(floodSummary(d.new_water_fraction, d.obscured_fraction, d.scenes, d.detector));
           update((x) => ({
             ...x,
             risk: {
@@ -205,7 +214,7 @@ export function PlanWorkspace({
               masks: [
                 ...x.risk.masks.filter((m) => m.id !== "W1"),
                 ...(d.mask.cells.length
-                  ? [{ id: "W1", name: "New surface water", mask: d.mask, rate_per_min: 0, impassable: true, source: `Sentinel-2 ${dates}` }]
+                  ? [{ id: "W1", name: "New surface water", mask: d.mask, rate_per_min: 0, impassable: true, source: `Sentinel-2 ${dates}, ${d.detector === "model" ? "U-Net" : "MNDWI"}` }]
                   : []),
               ],
             },

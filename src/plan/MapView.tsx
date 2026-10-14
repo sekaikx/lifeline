@@ -445,7 +445,7 @@ export function MapView(props: Props) {
             N
           </text>
         </g>
-        <g transform={`translate(${size.w - 24 - scaleLen / v.mpp}, ${size.h - 52})`}>
+        <g transform={`translate(${size.w - 24 - scaleLen / v.mpp}, 92)`}>
           <rect x={-6} y={-20} width={scaleLen / v.mpp + 12} height={28} fill={palette.surface} opacity={0.85} rx={3} />
           <line x1={0} x2={scaleLen / v.mpp} y1={0} y2={0} stroke={palette.text} strokeWidth={2} />
           <line x1={0} x2={0} y1={-4} y2={0} stroke={palette.text} strokeWidth={2} />
@@ -456,15 +456,17 @@ export function MapView(props: Props) {
         </g>
       </svg>
 
-      <div className="pmap-readout num">
-        {cursor
-          ? `${fmt(cursor.e / 1000, 2)} km E · ${fmt(cursor.n / 1000, 2)} km N · ${fmt(elevation(t, cursor.e, cursor.n), 0)} m`
-          : placing
-            ? "Click the map to place it · Esc to cancel"
-            : "Drag to pan · scroll to zoom · drag markers to move them"}
-      </div>
-      <div className="pmap-attrib">
-        {[...world.attribution, ...(baseLayer === "satellite" && imagery ? [imagery.attribution] : [])].join(" · ")}
+      <div className="pmap-foot">
+        <div className="pmap-readout num">
+          {cursor
+            ? `${fmt(cursor.e / 1000, 2)} km E · ${fmt(cursor.n / 1000, 2)} km N · ${fmt(elevation(t, cursor.e, cursor.n), 0)} m`
+            : placing
+              ? "Click the map to place it · Esc to cancel"
+              : "Drag to pan · scroll to zoom · drag markers to move them"}
+        </div>
+        <div className="pmap-attrib">
+          {[...world.attribution, ...(baseLayer === "satellite" && imagery ? [imagery.attribution] : [])].join(" · ")}
+        </div>
       </div>
       <button
         className="pmap-fit"

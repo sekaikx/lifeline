@@ -1,0 +1,7 @@
+# CPU wheels are enough: pip install -r ml/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+numpy>=1.26
+tifffile>=2024.1
+imagecodecs>=2024.1
+onnx>=1.16
+onnxruntime>=1.18

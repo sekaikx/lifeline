@@ -335,6 +335,10 @@ h4 {
   color: var(--text2);
 }
 
+.field:has(select) {
+  grid-template-columns: 1fr 1.7fr;
+}
+
 .field .hint {
   display: block;
   color: var(--muted);
@@ -591,10 +595,20 @@ select.select {
   pointer-events: none;
 }
 
-.pmap-readout {
+.pmap-foot {
   position: absolute;
   left: 12px;
+  right: 12px;
   bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  pointer-events: none;
+}
+
+.pmap-readout {
+  flex: none;
   font-size: 11.5px;
   color: var(--text2);
   background: color-mix(in srgb, var(--surface) 85%, transparent);
@@ -604,10 +618,8 @@ select.select {
 }
 
 .pmap-attrib {
-  position: absolute;
-  right: 12px;
-  bottom: 8px;
-  max-width: 60%;
+  min-width: 0;
+  max-width: 62ch;
   font-size: 10.5px;
   color: var(--text2);
   background: color-mix(in srgb, var(--surface) 85%, transparent);

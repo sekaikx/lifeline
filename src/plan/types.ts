@@ -147,13 +147,21 @@ export interface Imagery {
   attribution: string;
 }
 
+export type WaterDetector = "index" | "model";
+
 export interface WaterDetection {
   mask: CellMask;
   scenes: Scene[];
   obscured_fraction: number;
   water_fraction: number;
   new_water_fraction: number;
+  detector: WaterDetector;
   method: string;
+}
+
+export interface WaterDetectors {
+  model: string | null;
+  expected_path: string | null;
 }
 
 export interface Truck {

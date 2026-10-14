@@ -20,6 +20,7 @@ mod imagery;
 mod osm;
 mod pc;
 mod water;
+mod water_model;
 mod weather;
 
 pub use dem::terrain;
@@ -28,6 +29,7 @@ pub use frame::LocalFrame;
 pub use imagery::{imagery, Imagery, Scene};
 pub use osm::{network_from_overpass, osm, Place};
 pub use water::{classify, detect_new_water, Observation, WaterDetection};
+pub use water_model::{WaterModel, MODEL_BANDS, MODEL_ENV};
 pub use weather::{
     parse_iso_utc, profile_from_met_norway, profile_from_open_meteo, wind_profile, WindForecast,
     WindProvider,

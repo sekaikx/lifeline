@@ -4,3 +4,6 @@
 /src-tauri/gen/schemas
 *.log
 .DS_Store
+/ml/data
+/ml/runs
+__pycache__

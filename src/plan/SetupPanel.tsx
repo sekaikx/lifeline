@@ -4,7 +4,7 @@ import { NumberField, NumberInput, Section, SelectField } from "../components/Fi
 import { useEffect, useState } from "react";
 import { fmtPct } from "../lib/format";
 import type { Placing } from "./MapView";
-import type { Area, PlanScenario, WindProvider } from "./types";
+import type { Area, PlanScenario, WaterDetector, WindProvider } from "./types";
 
 type Update = (fn: (s: PlanScenario) => PlanScenario) => void;
 
@@ -34,8 +34,10 @@ export interface DataActions {
   busy: string | null;
   loadArea: (area: Area | null) => void;
   forecast: (provider: WindProvider, hours: number) => void;
-  detectFlooding: (date: string | null) => void;
+  detectFlooding: (date: string | null, detector: WaterDetector) => void;
   floodSummary: string | null;
+  /** path of the installed learned water model, if any */
+  waterModel: string | null;
 }
 
 export function SetupPanel({
@@ -353,7 +355,9 @@ function WindForecastControls({ real, actions, source }: { real: boolean; action
 
 function FloodControls({ real, actions }: { real: boolean; actions: DataActions }) {
   const [date, setDate] = useState("");
+  const [detector, setDetector] = useState<WaterDetector>("index");
   if (!real) return null;
+  const used = actions.waterModel ? detector : "index";
   return (
     <div className="flood">
       <div className="list-head">
@@ -365,7 +369,18 @@ function FloodControls({ real, actions }: { real: boolean; actions: DataActions 
         </span>
         <input className="text-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
-      <button className="btn" disabled={!!actions.busy} onClick={() => actions.detectFlooding(date || null)}>
+      {actions.waterModel && (
+        <SelectField
+          label="Detector"
+          value={used}
+          options={[
+            { value: "index", label: "Water index" },
+            { value: "model", label: "Trained U-Net" },
+          ]}
+          onChange={setDetector}
+        />
+      )}
+      <button className="btn" disabled={!!actions.busy} onClick={() => actions.detectFlooding(date || null, used)}>
         Detect new water
       </button>
       {actions.floodSummary && <p className="note">{actions.floodSummary}</p>}
@@ -373,5 +388,10 @@ function FloodControls({ real, actions }: { real: boolean; actions: DataActions 
   );
 }
 
-export const floodSummary = (newFrac: number, obscured: number, scenes: { date: string }[]) =>
-  `New water on ${fmtPct(newFrac, 1)} of the area; ${fmtPct(obscured)} could not be assessed (cloud, shadow, snow). Sentinel-2 ${[...new Set(scenes.map((x) => x.date))].join(", ")}.`;
+export const floodSummary = (
+  newFrac: number,
+  obscured: number,
+  scenes: { date: string }[],
+  detector: WaterDetector = "index",
+) =>
+  `New water on ${fmtPct(newFrac, 1)} of the area; ${fmtPct(obscured)} could not be assessed (cloud, shadow, snow). Sentinel-2 ${[...new Set(scenes.map((x) => x.date))].join(", ")}, ${detector === "model" ? "trained U-Net" : "water index"}.`;

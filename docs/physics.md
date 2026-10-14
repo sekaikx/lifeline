@@ -1,7 +1,8 @@
 # Physics and numerics
 
-This is the derivation behind `crates/airdrop-core`. Work through it on paper
-first (that is the week-1 exercise); the code follows it line by line.
+The derivation behind the airdrop model in `crates/airdrop`, with the
+atmosphere, wind and root finders it shares with the planner in
+`crates/core`. The code follows it section by section.
 
 ## 1. Frame and state
 

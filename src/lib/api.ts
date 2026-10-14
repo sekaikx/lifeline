@@ -13,6 +13,8 @@ import type {
   PlanScenario,
   RiskLayers,
   WaterDetection,
+  WaterDetector,
+  WaterDetectors,
   WindForecast,
   WindProvider,
   World,
@@ -34,8 +36,9 @@ export const api = {
   windForecast: (area: Area, provider: WindProvider, hours: number) =>
     invoke<WindForecast>("wind_forecast", { area, provider, hours }),
   imagery: (area: Area) => invoke<Imagery>("imagery", { area }),
-  detectFlooding: (area: Area, asOf: number | null) =>
-    invoke<WaterDetection>("detect_flooding", { area, asOf }),
+  waterDetectors: () => invoke<WaterDetectors>("water_detectors"),
+  detectFlooding: (area: Area, asOf: number | null, detector: WaterDetector) =>
+    invoke<WaterDetection>("detect_flooding", { area, asOf, detector }),
 
   // airdrop lab
   defaultScenario: () => invoke<Scenario>("default_scenario"),

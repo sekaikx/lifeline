@@ -19,6 +19,8 @@ pub(crate) struct Item {
     pub id: String,
     pub datetime: String,
     pub cloud: f64,
+    /// Sentinel-2 processing baseline, e.g. 5.1 (0 when not reported)
+    pub baseline: f64,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +75,10 @@ pub(crate) fn search(
                 .unwrap_or("")
                 .to_string(),
             cloud: f.properties["eo:cloud_cover"].as_f64().unwrap_or(0.0),
+            baseline: f.properties["s2:processing_baseline"]
+                .as_str()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0),
             id: f.id,
         })
         .collect())

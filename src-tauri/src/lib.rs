@@ -8,7 +8,9 @@
 use lifeline_airdrop::scenario::{
     self as drop, DropReport, MonteCarloReport, NumericsReport, ProfileRow,
 };
-use lifeline_geodata::{Area, Fetcher, Imagery, WaterDetection, WindForecast, WindProvider};
+use lifeline_geodata::{
+    Area, Fetcher, Imagery, WaterDetection, WaterModel, WindForecast, WindProvider,
+};
 use lifeline_planner::{Plan, PlanScenario, RiskLayers, World, WorldSpec};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
@@ -16,6 +18,7 @@ use tauri_plugin_dialog::DialogExt;
 
 struct Data {
     world: Mutex<Option<Arc<World>>>,
+    water_model: Mutex<Option<Arc<WaterModel>>>,
     fetcher: Fetcher,
 }
 
@@ -26,8 +29,20 @@ impl Data {
             .expect("HTTP client");
         Self {
             world: Mutex::new(None),
+            water_model: Mutex::new(None),
             fetcher,
         }
+    }
+
+    fn water_model(&self) -> Result<Arc<WaterModel>, String> {
+        let mut slot = self.water_model.lock().map_err(|e| e.to_string())?;
+        let path = WaterModel::locate().ok_or("no water model installed")?;
+        if let Some(m) = slot.as_ref().filter(|m| m.path == path) {
+            return Ok(Arc::clone(m));
+        }
+        let m = Arc::new(WaterModel::load(&path)?);
+        *slot = Some(Arc::clone(&m));
+        Ok(m)
     }
 
     fn world(&self, spec: &WorldSpec) -> Result<Arc<World>, String> {
@@ -141,16 +156,44 @@ async fn imagery(data: Shared<'_>, area: Area) -> Result<Imagery, String> {
     .await
 }
 
-/// New surface water from Sentinel-2. `as_of` (Unix seconds) reviews a past date.
+/// Which water detectors can run: the index always, the learned model when
+/// a model file is installed.
+#[derive(serde::Serialize)]
+struct WaterDetectors {
+    model: Option<String>,
+    expected_path: Option<String>,
+}
+
+#[tauri::command]
+fn water_detectors() -> WaterDetectors {
+    WaterDetectors {
+        model: WaterModel::locate().map(|p| p.display().to_string()),
+        expected_path: WaterModel::default_path().map(|p| p.display().to_string()),
+    }
+}
+
+/// New surface water from Sentinel-2. `as_of` (Unix seconds) reviews a past
+/// date; `detector` is `"index"` (default) or `"model"`.
 #[tauri::command]
 async fn detect_flooding(
     data: Shared<'_>,
     area: Area,
     as_of: Option<i64>,
+    detector: Option<String>,
 ) -> Result<WaterDetection, String> {
     blocking(&data, move |d| {
         let world = d.world(&WorldSpec::Real(area.clone()))?;
-        lifeline_geodata::detect_new_water(&d.fetcher, &area, &world.terrain, as_of)
+        let model = match detector.as_deref() {
+            Some("model") => Some(d.water_model()?),
+            _ => None,
+        };
+        lifeline_geodata::detect_new_water(
+            &d.fetcher,
+            &area,
+            &world.terrain,
+            as_of,
+            model.as_deref(),
+        )
     })
     .await
 }
@@ -244,6 +287,7 @@ pub fn run() {
             risk_layers,
             wind_forecast,
             imagery,
+            water_detectors,
             detect_flooding,
             default_scenario,
             drop_report,
