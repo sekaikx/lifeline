@@ -7,13 +7,14 @@ use lifeline_core::risk::{HazardArea, RiskModel, RiskSite};
 use lifeline_core::terrain::TerrainGrid;
 use lifeline_core::wind::{Wind, WindLayer};
 use lifeline_drone::DroneSpec;
+use lifeline_geodata::{Area, Fetcher, Place};
 use lifeline_ground::{RoadClass, RoadNetwork, Truck};
 use serde::{Deserialize, Serialize};
 
 /// Parameters of a generated world. The same spec always gives the same
 /// terrain and roads, so scenarios stay small and shareable.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct WorldSpec {
+pub struct GeneratedSpec {
     pub seed: u64,
     /// Side of the square map [m]
     pub size_m: f64,
@@ -26,9 +27,9 @@ pub struct WorldSpec {
     pub towns: usize,
 }
 
-impl Default for WorldSpec {
+impl Default for GeneratedSpec {
     fn default() -> Self {
-        WorldSpec {
+        GeneratedSpec {
             seed: 11,
             size_m: 24_000.0,
             cells: 160,
@@ -39,15 +40,49 @@ impl Default for WorldSpec {
     }
 }
 
+/// Where the map comes from: a reproducible synthetic world (for training
+/// and tests) or a real area built from open data.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WorldSpec {
+    Generated(GeneratedSpec),
+    Real(Area),
+}
+
+impl Default for WorldSpec {
+    fn default() -> Self {
+        WorldSpec::Generated(GeneratedSpec::default())
+    }
+}
+
 impl WorldSpec {
     pub fn validate(&self) -> Result<(), String> {
-        if !(2_000.0..=200_000.0).contains(&self.size_m) || !(16..=400).contains(&self.cells) {
-            return Err("world: size must be 2-200 km and cells 16-400".into());
+        match self {
+            WorldSpec::Generated(g) => {
+                if !(2_000.0..=200_000.0).contains(&g.size_m) || !(16..=400).contains(&g.cells) {
+                    return Err("world: size must be 2-200 km and cells 16-400".into());
+                }
+                if !(2..=24).contains(&g.towns) || g.relief_m < 0.0 {
+                    return Err("world: 2-24 towns, non-negative relief".into());
+                }
+                Ok(())
+            }
+            WorldSpec::Real(a) => a.validate(),
         }
-        if !(2..=24).contains(&self.towns) || self.relief_m < 0.0 {
-            return Err("world: 2-24 towns, non-negative relief".into());
+    }
+
+    pub fn size_m(&self) -> f64 {
+        match self {
+            WorldSpec::Generated(g) => g.size_m,
+            WorldSpec::Real(a) => a.size_m,
         }
-        Ok(())
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            WorldSpec::Generated(_) => "Generated valley",
+            WorldSpec::Real(a) => &a.name,
+        }
     }
 }
 
@@ -56,24 +91,62 @@ pub struct World {
     pub spec: WorldSpec,
     pub terrain: TerrainGrid,
     pub network: RoadNetwork,
+    /// Named settlements, largest first
+    pub places: Vec<Place>,
+    /// Data sources to credit on the map
+    pub attribution: Vec<String>,
 }
 
 impl World {
-    pub fn generate(spec: WorldSpec) -> Result<Self, String> {
+    /// A generated world (no network needed).
+    pub fn generate(spec: GeneratedSpec) -> Result<Self, String> {
+        Self::build(&WorldSpec::Generated(spec), None)
+    }
+
+    /// Build any world. Real areas download elevation and OpenStreetMap
+    /// data through `fetcher` (cached on disk).
+    pub fn build(spec: &WorldSpec, fetcher: Option<&Fetcher>) -> Result<Self, String> {
         spec.validate()?;
-        let terrain = TerrainGrid::procedural(
-            spec.seed,
-            spec.size_m,
-            spec.cells,
-            spec.base_m,
-            spec.relief_m,
-        );
-        let network = RoadNetwork::generate(&terrain, spec.seed, spec.towns);
-        Ok(World {
-            spec,
-            terrain,
-            network,
-        })
+        match spec {
+            WorldSpec::Generated(g) => {
+                let terrain =
+                    TerrainGrid::procedural(g.seed, g.size_m, g.cells, g.base_m, g.relief_m);
+                let network = RoadNetwork::generate(&terrain, g.seed, g.towns);
+                let places = network
+                    .towns
+                    .iter()
+                    .map(|t| Place {
+                        name: t.name.clone(),
+                        kind: "town".into(),
+                        x: t.x,
+                        y: t.y,
+                        population: None,
+                    })
+                    .collect();
+                Ok(World {
+                    spec: spec.clone(),
+                    terrain,
+                    network,
+                    places,
+                    attribution: vec!["Synthetic terrain".into()],
+                })
+            }
+            WorldSpec::Real(area) => {
+                let fetcher = fetcher.ok_or("a real area needs network access to load")?;
+                let terrain = lifeline_geodata::terrain(fetcher, area)?;
+                let (network, places) = lifeline_geodata::osm(fetcher, area)?;
+                Ok(World {
+                    spec: spec.clone(),
+                    terrain,
+                    network,
+                    places,
+                    attribution: vec![
+                        "Elevation: AWS Terrain Tiles (SRTM and others)".into(),
+                        "Roads and places © OpenStreetMap contributors, ODbL".into(),
+                    ],
+                })
+            }
+        }
     }
 }
 
@@ -200,6 +273,9 @@ pub struct Fleet {
 pub struct Weather {
     pub atmosphere: Atmosphere,
     pub wind: Wind,
+    /// Where the wind came from ("manual", or the forecast and its time)
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -267,35 +343,48 @@ impl PlanScenario {
         Ok(())
     }
 
-    /// A worked example on the default world: a depot with an airstrip in
-    /// the south-west, seven requests from a 12 kg medical resupply to a 6 t
-    /// water delivery, three observed road sections and two hazard areas.
+    /// A worked example on any world: a depot with an airstrip in the
+    /// south-west, seven requests from a 12 kg medical resupply to a 6 t
+    /// water delivery, three observed road stretches and two hazard areas.
+    /// On a real map the requests sit on real settlements.
     pub fn example(world: &World) -> PlanScenario {
-        let towns = &world.network.towns;
-        let half = world.spec.size_m / 2.0;
+        let places = &world.places;
+        let half = world.spec.size_m() / 2.0;
+        let dist = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
         let near = |x: f64, y: f64, skip: &[usize]| {
-            (0..towns.len())
+            (0..places.len())
                 .filter(|i| !skip.contains(i))
                 .min_by(|&a, &b| {
-                    let da = (towns[a].x - x).hypot(towns[a].y - y);
-                    let db = (towns[b].x - x).hypot(towns[b].y - y);
-                    da.total_cmp(&db)
+                    dist([places[a].x, places[a].y], [x, y])
+                        .total_cmp(&dist([places[b].x, places[b].y], [x, y]))
                 })
-                .unwrap()
+        };
+        let fallback = |x: f64, y: f64| {
+            (
+                format!("{:.0} km E, {:.0} km N", x / 1000.0, y / 1000.0),
+                x,
+                y,
+            )
         };
         let d = near(-0.65 * half, -0.65 * half, &[]);
+        let (dname, dx, dy) = d.map_or_else(
+            || fallback(-0.65 * half, -0.65 * half),
+            |i| (places[i].name.clone(), places[i].x, places[i].y),
+        );
         let depot = Depot {
-            name: format!("{} depot", towns[d].name),
-            x: towns[d].x,
-            y: towns[d].y,
+            name: format!("{dname} depot"),
+            x: dx,
+            y: dy,
             airstrip: true,
         };
 
-        let mut used = vec![d];
-        let mut pick = |fx: f64, fy: f64| {
-            let t = near(fx * half, fy * half, &used);
-            used.push(t);
-            &towns[t]
+        let mut used: Vec<usize> = d.into_iter().collect();
+        let mut pick = |fx: f64, fy: f64| match near(fx * half, fy * half, &used) {
+            Some(i) => {
+                used.push(i);
+                (places[i].name.clone(), places[i].x, places[i].y)
+            }
+            None => fallback(fx * half, fy * half),
         };
         let specs = [
             (0.55, 0.60, "Field clinic", 350.0, Priority::Critical, 3.0),
@@ -311,16 +400,21 @@ impl PlanScenario {
             ),
             (0.05, 0.75, "School kitchen", 900.0, Priority::Routine, 18.0),
         ];
+        let real = matches!(world.spec, WorldSpec::Real(_));
         let mut requests: Vec<Request> = specs
             .iter()
             .enumerate()
             .map(|(k, &(fx, fy, name, kg, priority, due))| {
-                let t = pick(fx, fy);
+                let (place, x, y) = pick(fx, fy);
                 Request {
                     id: format!("R{}", k + 1),
-                    name: name.into(),
-                    x: t.x,
-                    y: t.y,
+                    name: if real {
+                        format!("{name}, {place}")
+                    } else {
+                        name.into()
+                    },
+                    x,
+                    y,
                     demand_kg: kg,
                     priority,
                     due_h: due,
@@ -329,15 +423,17 @@ impl PlanScenario {
             })
             .collect();
 
-        // Two off-road sites on high ground: a relay post close to the depot
-        // and a mountain village cut off from the road network.
+        // Two off-road sites: a relay post on high ground near the depot,
+        // and a village cut off from the roads (the settlement farthest from
+        // any road, or high ground far from the depot when every settlement
+        // is on a road).
         let t = &world.terrain;
         let highest = |min: f64, max: f64| {
             let mut best = (f64::NEG_INFINITY, 0.0, 0.0);
             for j in 0..t.ny {
                 for i in 0..t.nx {
                     let (x, y) = (t.x0 + i as f64 * t.dx, t.y0 + j as f64 * t.dy);
-                    let r = (x - depot.x).hypot(y - depot.y);
+                    let r = dist([x, y], [depot.x, depot.y]);
                     let h = t.heights[j * t.nx + i];
                     if (min..max).contains(&r) && h > best.0 {
                         best = (h, x, y);
@@ -346,7 +442,7 @@ impl PlanScenario {
             }
             (best.1, best.2)
         };
-        let (rx, ry) = highest(0.0, 9_000.0);
+        let (rx, ry) = highest(0.0, 0.75 * half);
         requests.push(Request {
             id: "R6".into(),
             name: "Relay post".into(),
@@ -357,10 +453,30 @@ impl PlanScenario {
             due_h: 4.0,
             mode: ModeChoice::Auto,
         });
-        let (vx, vy) = highest(13_000.0, 22_000.0);
+        let off_road = |p: &Place| {
+            world
+                .network
+                .towns
+                .iter()
+                .map(|n| dist([n.x, n.y], [p.x, p.y]))
+                .fold(f64::INFINITY, f64::min)
+        };
+        let remote = places
+            .iter()
+            .filter(|p| dist([p.x, p.y], [depot.x, depot.y]) > 0.6 * half)
+            .map(|p| (off_road(p), p))
+            .filter(|(d, _)| *d > 1_500.0)
+            .max_by(|a, b| a.0.total_cmp(&b.0));
+        let (vname, vx, vy) = match remote {
+            Some((_, p)) => (format!("Mountain village, {}", p.name), p.x, p.y),
+            None => {
+                let (x, y) = highest(1.08 * half, 1.83 * half);
+                ("Mountain village".to_string(), x, y)
+            }
+        };
         requests.push(Request {
             id: "R7".into(),
-            name: "Mountain village".into(),
+            name: vname,
             x: vx,
             y: vy,
             demand_kg: 1_500.0,
@@ -369,29 +485,33 @@ impl PlanScenario {
             mode: ModeChoice::Auto,
         });
 
-        // Risk sites: on high ground overlooking the middle of three paved
-        // roads, ordered by distance from the depot so the example is stable.
-        let mut paved: Vec<&lifeline_ground::Road> = world
+        // Risk sites on high ground overlooking paved roads, spread out from
+        // the depot: one road stretch closest to each of three distances.
+        let paved: Vec<&lifeline_ground::Road> = world
             .network
             .roads
             .iter()
             .filter(|r| r.class == RoadClass::Paved)
             .collect();
         let mid = |r: &lifeline_ground::Road| r.points[r.points.len() / 2];
-        paved.sort_by(|a, b| {
-            let (ma, mb) = (mid(a), mid(b));
-            let da = (ma[0] - depot.x).hypot(ma[1] - depot.y);
-            let db = (mb[0] - depot.x).hypot(mb[1] - depot.y);
-            da.total_cmp(&db)
-        });
-        let chosen: Vec<&&lifeline_ground::Road> =
-            paved.iter().skip(1).step_by(3).take(3).collect();
+        let mut chosen: Vec<[f64; 2]> = Vec::new();
+        for target in [0.45, 0.85, 1.25] {
+            let best = paved
+                .iter()
+                .map(|r| mid(r))
+                .filter(|m| chosen.iter().all(|c| dist(*c, *m) > 4_000.0))
+                .min_by(|a, b| {
+                    let da = (dist(*a, [depot.x, depot.y]) - target * half).abs();
+                    let db = (dist(*b, [depot.x, depot.y]) - target * half).abs();
+                    da.total_cmp(&db)
+                });
+            chosen.extend(best);
+        }
         let sites = chosen
             .iter()
             .enumerate()
-            .map(|(k, r)| {
-                let m = mid(r);
-                // highest point 1-2.5 km from the road midpoint
+            .map(|(k, m)| {
+                // highest point 1-2.5 km from the road
                 let mut top = (f64::NEG_INFINITY, m[0], m[1]);
                 for a in 0..16 {
                     for rr in [1_000.0, 1_750.0, 2_500.0] {
@@ -415,13 +535,18 @@ impl PlanScenario {
             })
             .collect();
 
-        // hazard areas on two gravel roads
-        let gravel: Vec<&lifeline_ground::Road> = world
+        // hazard areas on unpaved roads at mid distance
+        let mut unpaved: Vec<&lifeline_ground::Road> = world
             .network
             .roads
             .iter()
             .filter(|r| r.class != RoadClass::Paved)
             .collect();
+        unpaved.sort_by(|a, b| {
+            (dist(mid(a), [depot.x, depot.y]) - half)
+                .abs()
+                .total_cmp(&(dist(mid(b), [depot.x, depot.y]) - half).abs())
+        });
         let square = |c: [f64; 2], s: f64| {
             vec![
                 [c[0] - s, c[1] - s],
@@ -431,7 +556,7 @@ impl PlanScenario {
             ]
         };
         let mut hazards = Vec::new();
-        if let Some(r) = gravel.first() {
+        if let Some(r) = unpaved.first() {
             hazards.push(HazardArea {
                 id: "H1".into(),
                 name: "Washed-out crossing".into(),
@@ -440,7 +565,10 @@ impl PlanScenario {
                 impassable: true,
             });
         }
-        if let Some(r) = gravel.get(gravel.len() / 2) {
+        if let Some(r) = unpaved
+            .iter()
+            .find(|r| dist(mid(r), mid(unpaved[0])) > 5_000.0)
+        {
             hazards.push(HazardArea {
                 id: "H2".into(),
                 name: "Reported mines".into(),
@@ -451,12 +579,20 @@ impl PlanScenario {
         }
 
         PlanScenario {
-            name: "Valley resupply".into(),
-            world: world.spec,
+            name: if real {
+                format!("{} resupply", world.spec.name())
+            } else {
+                "Valley resupply".into()
+            },
+            world: world.spec.clone(),
             depot,
             requests,
             fleet: Fleet::default(),
-            risk: RiskModel { sites, hazards },
+            risk: RiskModel {
+                sites,
+                hazards,
+                masks: Vec::new(),
+            },
             weather: Weather {
                 atmosphere: Atmosphere::Isa {
                     temperature_offset: 0.0,
@@ -480,6 +616,7 @@ impl PlanScenario {
                         },
                     ],
                 },
+                source: Some("Example profile, not a forecast".into()),
             },
             settings: Settings {
                 min_delivery_prob: 0.9,

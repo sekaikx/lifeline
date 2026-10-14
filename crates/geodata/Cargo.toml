@@ -1,0 +1,20 @@
+[package]
+name = "lifeline-geodata"
+description = "Real-world inputs: elevation, OpenStreetMap roads and places, wind forecasts, Sentinel-2 imagery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lifeline-core.workspace = true
+lifeline-ground.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots", "gzip"] }
+png = "0.18"
+base64 = "0.22"
+dirs = "6"
+
+[lints]
+workspace = true

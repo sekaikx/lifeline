@@ -86,6 +86,7 @@ fn two_routes() -> (TerrainGrid, RoadNetwork, RiskModel) {
             rate_per_min: 0.2,
         }],
         hazards: vec![],
+        masks: vec![],
     };
     (t, RoadNetwork { towns, roads }, risk)
 }

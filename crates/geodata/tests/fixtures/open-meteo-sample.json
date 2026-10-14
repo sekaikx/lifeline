@@ -1,0 +1,28 @@
+{
+  "latitude": 28.0,
+  "longitude": 84.625,
+  "elevation": 1250.0,
+  "hourly": {
+    "time": [1790000000, 1790003600],
+    "wind_speed_10m": [2.0, 3.0],
+    "wind_direction_10m": [250.0, 260.0],
+    "wind_speed_80m": [3.5, 4.0],
+    "wind_direction_80m": [252.0, 262.0],
+    "wind_speed_120m": [4.0, 4.5],
+    "wind_direction_120m": [254.0, 264.0],
+    "wind_speed_180m": [4.6, 5.0],
+    "wind_direction_180m": [256.0, 266.0],
+    "wind_speed_1000hPa": [1.0, 1.0],
+    "wind_direction_1000hPa": [200.0, 200.0],
+    "geopotential_height_1000hPa": [110.0, 110.0],
+    "wind_speed_850hPa": [7.0, 8.0],
+    "wind_direction_850hPa": [270.0, 275.0],
+    "geopotential_height_850hPa": [1495.0, 1493.0],
+    "wind_speed_700hPa": [11.0, 12.0],
+    "wind_direction_700hPa": [280.0, 282.0],
+    "geopotential_height_700hPa": [3120.0, 3118.0],
+    "wind_speed_500hPa": [null, 20.0],
+    "wind_direction_500hPa": [null, 290.0],
+    "geopotential_height_500hPa": [5850.0, 5848.0]
+  }
+}

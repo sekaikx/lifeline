@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 
 fn world() -> &'static World {
     static W: OnceLock<World> = OnceLock::new();
-    W.get_or_init(|| World::generate(WorldSpec::default()).unwrap())
+    W.get_or_init(|| World::generate(GeneratedSpec::default()).unwrap())
 }
 
 fn example() -> PlanScenario {
@@ -157,6 +157,9 @@ fn scenario_round_trips_and_validates() {
     bad.requests[0].demand_kg = 0.0;
     assert!(plan(world(), &bad).is_err());
     let mut other = s;
-    other.world.seed = 99;
+    other.world = WorldSpec::Generated(GeneratedSpec {
+        seed: 99,
+        ..GeneratedSpec::default()
+    });
     assert!(plan(world(), &other).unwrap_err().contains("world"));
 }

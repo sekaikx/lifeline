@@ -11,6 +11,7 @@ serde.workspace = true
 lifeline-airdrop.workspace = true
 lifeline-ground.workspace = true
 lifeline-drone.workspace = true
+lifeline-geodata.workspace = true
 rayon.workspace = true
 
 [dev-dependencies]

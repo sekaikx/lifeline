@@ -1,8 +1,10 @@
 import { LayerTable } from "../airdrop/ScenarioPanel";
 import type { Wind } from "../airdrop/types";
 import { NumberField, NumberInput, Section, SelectField } from "../components/Field";
+import { useEffect, useState } from "react";
+import { fmtPct } from "../lib/format";
 import type { Placing } from "./MapView";
-import type { PlanScenario } from "./types";
+import type { Area, PlanScenario, WindProvider } from "./types";
 
 type Update = (fn: (s: PlanScenario) => PlanScenario) => void;
 
@@ -20,17 +22,36 @@ const windPresets: Record<Wind["type"], Wind> = {
   },
 };
 
+const PRESETS: { id: string; label: string; area: Area | null }[] = [
+  { id: "generated", label: "Generated valley (synthetic)", area: null },
+  { id: "gorkha", label: "Gorkha, Nepal", area: { name: "Gorkha", lat: 28.0, lon: 84.63, size_m: 30_000, cell_m: 100 } },
+  { id: "dadu", label: "Dadu, Pakistan", area: { name: "Dadu", lat: 26.75, lon: 67.75, size_m: 40_000, cell_m: 100 } },
+  { id: "kahramanmaras", label: "Kahramanmaraş, Türkiye", area: { name: "Kahramanmaraş", lat: 37.58, lon: 36.93, size_m: 30_000, cell_m: 100 } },
+  { id: "custom", label: "Custom location", area: null },
+];
+
+export interface DataActions {
+  busy: string | null;
+  loadArea: (area: Area | null) => void;
+  forecast: (provider: WindProvider, hours: number) => void;
+  detectFlooding: (date: string | null) => void;
+  floodSummary: string | null;
+}
+
 export function SetupPanel({
   scenario: s,
   update,
   placing,
   setPlacing,
+  actions,
 }: {
   scenario: PlanScenario;
   update: Update;
   placing: Placing;
   setPlacing: (p: Placing) => void;
+  actions: DataActions;
 }) {
+  const real = s.world.type === "real" ? s.world : null;
   const f = s.fleet;
   const setTrucks = (patch: Partial<typeof f.trucks>) => update((x) => ({ ...x, fleet: { ...x.fleet, trucks: { ...x.fleet.trucks, ...patch } } }));
   const setTruck = (patch: Partial<typeof f.trucks.truck>) => setTrucks({ truck: { ...f.trucks.truck, ...patch } });
@@ -41,6 +62,8 @@ export function SetupPanel({
 
   return (
     <aside className="setup">
+      <AreaSection scenario={s} actions={actions} />
+
       <Section title="Depot">
         <label className="field">
           <span>Name</span>
@@ -169,6 +192,28 @@ export function SetupPanel({
             </div>
           </div>
         ))}
+        <FloodControls real={!!real} actions={actions} />
+        {s.risk.masks.map((m, i) => (
+          <div key={m.id} className="list-item">
+            <div className="pair">
+              <span>{m.name}</span>
+              <label className="toggle small">
+                <input
+                  type="checkbox"
+                  checked={m.impassable}
+                  onChange={(e) => update((x) => ({ ...x, risk: { ...x.risk, masks: x.risk.masks.map((q, j) => (j === i ? { ...q, impassable: e.target.checked } : q)) } }))}
+                />
+                Impassable
+              </label>
+              <button className="row-btn" aria-label={`Remove ${m.name}`} onClick={() => update((x) => ({ ...x, risk: { ...x.risk, masks: x.risk.masks.filter((_, j) => j !== i) } }))}>
+                ✕
+              </button>
+            </div>
+            <span className="note">
+              {m.mask.cells.length.toLocaleString("en-US")} cells · {m.source}
+            </span>
+          </div>
+        ))}
         <p className="note">
           An observed area only counts where it has line of sight, so ridges hide routes. Rates are expected losses per
           minute in view.
@@ -176,6 +221,7 @@ export function SetupPanel({
       </Section>
 
       <Section title="Wind" open={false}>
+        <WindForecastControls real={!!real} actions={actions} source={s.weather.source} />
         <SelectField
           label="Model"
           value={wind.type}
@@ -184,24 +230,148 @@ export function SetupPanel({
             { value: "uniform", label: "Uniform" },
             { value: "layered", label: "Sounding (layers)" },
           ]}
-          onChange={(t) => update((x) => ({ ...x, weather: { ...x.weather, wind: windPresets[t] } }))}
+          onChange={(t) => update((x) => ({ ...x, weather: { ...x.weather, wind: windPresets[t], source: "Entered by hand" } }))}
         />
         {wind.type === "uniform" && (
           <>
-            <NumberField label="Speed" unit="m/s" min={0} step={1} value={wind.speed} onChange={(v) => update((x) => ({ ...x, weather: { ...x.weather, wind: { ...wind, speed: v } } }))} />
-            <NumberField label="From" unit="°" min={0} max={360} step={10} value={wind.from_deg} onChange={(v) => update((x) => ({ ...x, weather: { ...x.weather, wind: { ...wind, from_deg: v } } }))} />
+            <NumberField label="Speed" unit="m/s" min={0} step={1} value={wind.speed} onChange={(v) => update((x) => ({ ...x, weather: { ...x.weather, wind: { ...wind, speed: v }, source: "Entered by hand" } }))} />
+            <NumberField label="From" unit="°" min={0} max={360} step={10} value={wind.from_deg} onChange={(v) => update((x) => ({ ...x, weather: { ...x.weather, wind: { ...wind, from_deg: v }, source: "Entered by hand" } }))} />
           </>
         )}
-        {wind.type === "layered" && <LayerTable wind={wind} setWind={(w) => update((x) => ({ ...x, weather: { ...x.weather, wind: w } }))} />}
+        {wind.type === "layered" && <LayerTable wind={wind} setWind={(w) => update((x) => ({ ...x, weather: { ...x.weather, wind: w, source: "Entered by hand" } }))} />}
         <p className="note">Altitudes are above sea level. Wind sets drone ground speed and airdrop drift.</p>
       </Section>
 
-      <Section title="Terrain" open={false}>
-        <NumberField label="Seed" min={0} integer step={1} value={s.world.seed} onChange={(v) => update((x) => ({ ...x, world: { ...x.world, seed: v } }))} />
-        <NumberField label="Relief" unit="m" min={0} step={50} value={s.world.relief_m} onChange={(v) => update((x) => ({ ...x, world: { ...x.world, relief_m: v } }))} />
-        <NumberField label="Towns" min={2} max={24} integer step={1} value={s.world.towns} onChange={(v) => update((x) => ({ ...x, world: { ...x.world, towns: v } }))} />
-        <p className="note">Terrain and roads are generated from these values. Requests and risk keep their positions.</p>
-      </Section>
+      {s.world.type === "generated" && (
+        <Section title="Generated terrain" open={false}>
+          <NumberField label="Seed" min={0} integer step={1} value={s.world.seed} onChange={(v) => update((x) => (x.world.type === "generated" ? { ...x, world: { ...x.world, seed: v } } : x))} />
+          <NumberField label="Relief" unit="m" min={0} step={50} value={s.world.relief_m} onChange={(v) => update((x) => (x.world.type === "generated" ? { ...x, world: { ...x.world, relief_m: v } } : x))} />
+          <NumberField label="Towns" min={2} max={24} integer step={1} value={s.world.towns} onChange={(v) => update((x) => (x.world.type === "generated" ? { ...x, world: { ...x.world, towns: v } } : x))} />
+          <p className="note">Synthetic terrain for training and testing. Requests and risk keep their positions.</p>
+        </Section>
+      )}
     </aside>
   );
 }
+
+function AreaSection({ scenario: s, actions }: { scenario: PlanScenario; actions: DataActions }) {
+  const current = s.world.type === "real" ? s.world : null;
+  const [preset, setPreset] = useState(() => (current ? PRESETS.find((p) => p.area?.name === current.name)?.id ?? "custom" : "generated"));
+  const [draft, setDraft] = useState<Area>(current ?? PRESETS[1].area!);
+  useEffect(() => {
+    if (current) setDraft(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.name, current?.lat, current?.lon]);
+  return (
+    <Section title="Area">
+      <p className="area-now">
+        {current ? (
+          <>
+            <strong>{current.name}</strong>
+            <span className="num muted">
+              {" "}
+              {current.lat.toFixed(3)}°, {current.lon.toFixed(3)}° · {current.size_m / 1000} km square
+            </span>
+          </>
+        ) : (
+          <>
+            <strong>Generated valley</strong>
+            <span className="muted"> · synthetic terrain</span>
+          </>
+        )}
+      </p>
+      <SelectField
+        label="Load"
+        value={preset}
+        options={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+        onChange={(id) => {
+          setPreset(id);
+          const a = PRESETS.find((p) => p.id === id)?.area;
+          if (a) setDraft(a);
+        }}
+      />
+      {preset === "custom" && (
+        <>
+          <label className="field">
+            <span>Name</span>
+            <input className="text-input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          </label>
+          <NumberField label="Latitude" unit="°" min={-80} max={80} step={0.01} value={draft.lat} onChange={(v) => setDraft({ ...draft, lat: v })} />
+          <NumberField label="Longitude" unit="°" min={-180} max={180} step={0.01} value={draft.lon} onChange={(v) => setDraft({ ...draft, lon: v })} />
+        </>
+      )}
+      {preset !== "generated" && (
+        <>
+          <NumberField label="Size" unit="km" min={2} max={80} step={5} value={draft.size_m / 1000} onChange={(v) => setDraft({ ...draft, size_m: v * 1000 })} />
+          <NumberField label="Grid" unit="m" min={30} max={500} step={10} value={draft.cell_m} onChange={(v) => setDraft({ ...draft, cell_m: v })} />
+        </>
+      )}
+      <button className="btn" disabled={!!actions.busy} onClick={() => actions.loadArea(preset === "generated" ? null : draft)}>
+        {actions.busy ?? "Load area and example plan"}
+      </button>
+      <p className="note">
+        Real areas use open data: elevation (SRTM), roads and settlements (OpenStreetMap) and the current forecast. The
+        first load of an area can take a minute; it is cached afterwards.
+      </p>
+    </Section>
+  );
+}
+
+function WindForecastControls({ real, actions, source }: { real: boolean; actions: DataActions; source: string | null }) {
+  const [provider, setProvider] = useState<WindProvider>("met-norway");
+  const [hours, setHours] = useState(0);
+  return (
+    <>
+      <p className="note" style={{ marginTop: 0 }}>
+        Now using: {source ?? "manual profile"}
+      </p>
+      {real && (
+        <>
+          <SelectField<WindProvider>
+            label="Forecast"
+            value={provider}
+            options={[
+              { value: "met-norway", label: "MET Norway" },
+              { value: "open-meteo", label: "Open-Meteo" },
+            ]}
+            onChange={setProvider}
+          />
+          <NumberField label="Hours ahead" unit="h" min={0} max={48} step={1} value={hours} onChange={setHours} />
+          <button className="btn" disabled={!!actions.busy} onClick={() => actions.forecast(provider, hours)}>
+            Use forecast
+          </button>
+          <p className="note">
+            {provider === "met-norway"
+              ? "Surface wind, extended aloft with a power law. Free for any use with attribution."
+              : "Full vertical profile. Free for non-commercial use; commercial use needs an API key."}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+function FloodControls({ real, actions }: { real: boolean; actions: DataActions }) {
+  const [date, setDate] = useState("");
+  if (!real) return null;
+  return (
+    <div className="flood">
+      <div className="list-head">
+        <span>Satellite flood check</span>
+      </div>
+      <label className="field">
+        <span>
+          As of<span className="hint">empty for the latest images</span>
+        </span>
+        <input className="text-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      <button className="btn" disabled={!!actions.busy} onClick={() => actions.detectFlooding(date || null)}>
+        Detect new water
+      </button>
+      {actions.floodSummary && <p className="note">{actions.floodSummary}</p>}
+    </div>
+  );
+}
+
+export const floodSummary = (newFrac: number, obscured: number, scenes: { date: string }[]) =>
+  `New water on ${fmtPct(newFrac, 1)} of the area; ${fmtPct(obscured)} could not be assessed (cloud, shadow, snow). Sentinel-2 ${[...new Set(scenes.map((x) => x.date))].join(", ")}.`;

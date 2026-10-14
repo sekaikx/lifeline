@@ -5,13 +5,32 @@ import type { Atmosphere, Payload, Uncertainty, Wind } from "../airdrop/types";
 
 export type Point = [number, number];
 
-export interface WorldSpec {
+export interface GeneratedSpec {
   seed: number;
   size_m: number;
   cells: number;
   base_m: number;
   relief_m: number;
   towns: number;
+}
+
+/** A square area on Earth, centred on lat/lon. */
+export interface Area {
+  name: string;
+  lat: number;
+  lon: number;
+  size_m: number;
+  cell_m: number;
+}
+
+export type WorldSpec = ({ type: "generated" } & GeneratedSpec) | ({ type: "real" } & Area);
+
+export interface Place {
+  name: string;
+  kind: string;
+  x: number;
+  y: number;
+  population: number | null;
 }
 
 export interface TerrainGrid {
@@ -33,6 +52,8 @@ export interface World {
     towns: { id: number; name: string; x: number; y: number }[];
     roads: { a: number; b: number; class: RoadClass; points: Point[] }[];
   };
+  places: Place[];
+  attribution: string[];
 }
 
 export interface Raster {
@@ -81,6 +102,58 @@ export interface HazardArea {
   polygon: Point[];
   rate_per_min: number;
   impassable: boolean;
+}
+
+export interface CellMask {
+  x0: number;
+  y0: number;
+  cell: number;
+  nx: number;
+  ny: number;
+  cells: number[];
+}
+
+export interface HazardMask {
+  id: string;
+  name: string;
+  mask: CellMask;
+  rate_per_min: number;
+  impassable: boolean;
+  source: string;
+}
+
+export interface Scene {
+  id: string;
+  date: string;
+  cloud: number;
+}
+
+export interface WindForecast {
+  wind: Wind;
+  valid_unix: number;
+  elevation: number;
+  source: string;
+}
+
+export type WindProvider = "met-norway" | "open-meteo";
+
+export interface Imagery {
+  png_base64: string;
+  width: number;
+  height: number;
+  /** west, south, east, north in local metres */
+  bounds: [number, number, number, number];
+  scenes: Scene[];
+  attribution: string;
+}
+
+export interface WaterDetection {
+  mask: CellMask;
+  scenes: Scene[];
+  obscured_fraction: number;
+  water_fraction: number;
+  new_water_fraction: number;
+  method: string;
 }
 
 export interface Truck {
@@ -133,8 +206,8 @@ export interface PlanScenario {
     drones: { count: number; drone: DroneSpec; cost_per_hour: number };
     aircraft: AircraftFleet;
   };
-  risk: { sites: RiskSite[]; hazards: HazardArea[] };
-  weather: { atmosphere: Atmosphere; wind: Wind };
+  risk: { sites: RiskSite[]; hazards: HazardArea[]; masks: HazardMask[] };
+  weather: { atmosphere: Atmosphere; wind: Wind; source: string | null };
   settings: { min_delivery_prob: number; seed: number };
 }
 

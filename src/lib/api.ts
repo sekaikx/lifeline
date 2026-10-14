@@ -6,7 +6,18 @@ import type {
   ProfileRow,
   Scenario,
 } from "../airdrop/types";
-import type { Plan, PlanScenario, RiskLayers, World, WorldSpec } from "../plan/types";
+import type {
+  Area,
+  Imagery,
+  Plan,
+  PlanScenario,
+  RiskLayers,
+  WaterDetection,
+  WindForecast,
+  WindProvider,
+  World,
+  WorldSpec,
+} from "../plan/types";
 
 /** True inside the desktop app (or a test harness that provides the IPC bridge). */
 export const hasBackend = (): boolean =>
@@ -14,10 +25,17 @@ export const hasBackend = (): boolean =>
 
 export const api = {
   // planning
-  examplePlan: () => invoke<PlanScenario>("example_plan"),
+  examplePlan: (area: Area | null) => invoke<PlanScenario>("example_plan", { area }),
   world: (spec: WorldSpec) => invoke<World>("world", { spec }),
   plan: (scenario: PlanScenario) => invoke<Plan>("plan", { scenario }),
   riskLayers: (scenario: PlanScenario) => invoke<RiskLayers>("risk_layers", { scenario }),
+
+  // open data for real areas
+  windForecast: (area: Area, provider: WindProvider, hours: number) =>
+    invoke<WindForecast>("wind_forecast", { area, provider, hours }),
+  imagery: (area: Area) => invoke<Imagery>("imagery", { area }),
+  detectFlooding: (area: Area, asOf: number | null) =>
+    invoke<WaterDetection>("detect_flooding", { area, asOf }),
 
   // airdrop lab
   defaultScenario: () => invoke<Scenario>("default_scenario"),

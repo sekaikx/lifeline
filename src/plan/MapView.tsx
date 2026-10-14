@@ -3,9 +3,10 @@ import { fmt, niceStep } from "../lib/format";
 import type { Palette, ThemeMode } from "../lib/theme";
 import { placeLabels, type LabelInput } from "./labels";
 import { elevation, reliefStyle, renderRelief, renderRisk } from "./render";
-import type { Mode, Plan, PlanScenario, Point, RiskLayers, World } from "./types";
+import type { HazardMask, Imagery, Mode, Plan, PlanScenario, Point, RiskLayers, World } from "./types";
 
 export type RiskLayer = "off" | "ground" | "drone" | "air";
+export type BaseLayer = "relief" | "satellite";
 export type Placing = null | "request" | "site" | "hazard";
 type DragKind = "request" | "depot" | "site";
 
@@ -22,6 +23,40 @@ interface Props {
   placing: Placing;
   onPlace: (x: number, y: number) => void;
   onMove: (kind: DragKind, id: string, x: number, y: number) => void;
+  baseLayer: BaseLayer;
+  imagery: Imagery | null;
+  /** Height of the map key overlay, kept clear of labels [px] */
+  keyHeight: number;
+}
+
+/** Hatched raster of a hazard mask, at three pixels per cell. */
+function renderMask(m: HazardMask, color: string): HTMLCanvasElement {
+  const k = 3;
+  const { nx, ny } = m.mask;
+  const c = document.createElement("canvas");
+  c.width = nx * k;
+  c.height = ny * k;
+  const ctx = c.getContext("2d")!;
+  const img = ctx.createImageData(c.width, c.height);
+  const v = parseInt(color.slice(1), 16);
+  const [r, g, b] = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  for (const cell of m.mask.cells) {
+    const i = cell % nx;
+    const j = Math.floor(cell / nx);
+    for (let dy = 0; dy < k; dy++)
+      for (let dx = 0; dx < k; dx++) {
+        const px = i * k + dx;
+        const py = (ny - 1 - j) * k + dy;
+        const on = (px + py) % 4 === 0; // diagonal hatch
+        const o = (py * c.width + px) * 4;
+        img.data[o] = r;
+        img.data[o + 1] = g;
+        img.data[o + 2] = b;
+        img.data[o + 3] = on ? 210 : 35;
+      }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 interface View {
@@ -38,7 +73,7 @@ export const modeColor = (p: Palette, m: Mode | null) =>
   m === "truck" ? p.blue : m === "drone" ? p.orange : m === "airdrop" ? p.aqua : p.muted;
 
 export function MapView(props: Props) {
-  const { world, scenario, plan, layers, palette, theme, selected, riskLayer, placing } = props;
+  const { world, scenario, plan, layers, palette, theme, selected, riskLayer, placing, baseLayer, imagery } = props;
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -85,6 +120,16 @@ export function MapView(props: Props) {
     return { img: renderRisk(layers[riskLayer], palette.critical), r: layers[riskLayer] };
   }, [layers, riskLayer, palette]);
 
+  const [imgReady, setImgReady] = useState(0);
+  const satellite = useMemo(() => {
+    if (!imagery) return null;
+    const img = new Image();
+    img.onload = () => setImgReady((n) => n + 1);
+    img.src = `data:image/png;base64,${imagery.png_base64}`;
+    return img;
+  }, [imagery]);
+  const masks = useMemo(() => scenario.risk.masks.map((m) => ({ m, img: renderMask(m, palette.critical) })), [scenario.risk.masks, palette]);
+
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
@@ -97,14 +142,55 @@ export function MapView(props: Props) {
     ctx.fillRect(0, 0, size.w, size.h);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(relief, sx(bx0), sy(by1), (bx1 - bx0) / v.mpp, (by1 - by0) / v.mpp);
+    if (baseLayer === "satellite" && satellite?.complete && imagery) {
+      const [w, sBound, e, n] = imagery.bounds;
+      ctx.drawImage(satellite, sx(w), sy(n), (e - w) / v.mpp, (n - sBound) / v.mpp);
+    } else {
+      ctx.drawImage(relief, sx(bx0), sy(by1), (bx1 - bx0) / v.mpp, (by1 - by0) / v.mpp);
+    }
     if (risk) {
       const { r } = risk;
       const half = r.cell / 2;
       ctx.drawImage(risk.img, sx(r.x0 - half), sy(r.y0 + (r.ny - 1) * r.cell + half), (r.nx * r.cell) / v.mpp, (r.ny * r.cell) / v.mpp);
     }
+    ctx.imageSmoothingEnabled = false;
+    for (const { m, img } of masks) {
+      const half = m.mask.cell / 2;
+      ctx.drawImage(img, sx(m.mask.x0 - half), sy(m.mask.y0 + (m.mask.ny - 1) * m.mask.cell + half), (m.mask.nx * m.mask.cell) / v.mpp, (m.mask.ny * m.mask.cell) / v.mpp);
+    }
+    ctx.imageSmoothingEnabled = true;
+
+    // roads: a light casing under each line keeps them legible on any base
+    const onSatellite = baseLayer === "satellite";
+    const far = v.mpp > 30;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const trace = (pts: Point[]) => {
+      ctx.beginPath();
+      pts.forEach(([x, y], k) => (k ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))));
+      ctx.stroke();
+    };
+    for (const pass of ["casing", "line"] as const) {
+      for (const r of world.network.roads) {
+        const paved = r.class === "paved";
+        if (far && r.class === "track" && pass === "casing") continue;
+        ctx.setLineDash(pass === "line" && r.class === "track" ? [5, 4] : []);
+        ctx.globalAlpha = far && r.class === "track" ? 0.45 : pass === "casing" ? 0.85 : 1;
+        ctx.strokeStyle = pass === "casing" ? (onSatellite ? "#000000" : palette.surface) : onSatellite ? "#f4f1e8" : palette.text2;
+        ctx.lineWidth = pass === "casing" ? (paved ? 5 : 3.2) : paved ? 2.2 : r.class === "gravel" ? 1.3 : 1.1;
+        trace(r.points);
+      }
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = onSatellite ? "#f4f1e8" : palette.text2;
+    for (const p of world.places) {
+      ctx.beginPath();
+      ctx.arc(sx(p.x), sy(p.y), 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relief, risk, v.cx, v.cy, v.mpp, size, palette]);
+  }, [relief, risk, masks, satellite, imgReady, baseLayer, world, v.cx, v.cy, v.mpp, size, palette]);
 
   // ------------------------------------------------------------ interaction
   const pointerWorld = (ev: React.PointerEvent | React.WheelEvent) => {
@@ -204,11 +290,14 @@ export function MapView(props: Props) {
         font: regular,
       };
     }),
-    ...world.network.towns.map((town) => ({
-      key: `t${town.id}`,
-      text: town.name,
-      x: sx(town.x),
-      y: sy(town.y),
+    // settlements: towns and cities always, villages once zoomed in
+    ...world.places
+      .filter((place) => place.kind === "city" || place.kind === "town" || v.mpp < 22)
+      .map((place, k) => ({
+      key: `p${k}`,
+      text: place.name,
+      x: sx(place.x),
+      y: sy(place.y),
       gap: 6,
       className: "pmap-town",
       font: "11px system-ui, sans-serif",
@@ -227,7 +316,7 @@ export function MapView(props: Props) {
       return markerBox(sx(x), sy(y), 8);
     }),
     // keep clear of the map key, fit button and north arrow
-    { x0: 0, y0: 0, x1: 360, y1: 92 },
+    { x0: 0, y0: 0, x1: 364, y1: props.keyHeight + 14 },
     { x0: size.w - 120, y0: 0, x1: size.w, y1: 60 },
   ];
   const labels = placeLabels(labelInputs, obstacles, { w: size.w, h: size.h });
@@ -253,28 +342,6 @@ export function MapView(props: Props) {
             <line x1="0" y1="0" x2="0" y2="4" stroke={palette.critical} strokeWidth="1.6" opacity="0.7" />
           </pattern>
         </defs>
-
-        {/* roads: casing then centre line */}
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-          {world.network.roads.map((r, i) => (
-            <polyline key={`c${i}`} points={pts(r.points)} stroke={palette.surface} strokeWidth={r.class === "paved" ? 5 : 3.5} opacity={0.85} />
-          ))}
-          {world.network.roads.map((r, i) => (
-            <polyline
-              key={`r${i}`}
-              points={pts(r.points)}
-              stroke={palette.text2}
-              strokeWidth={r.class === "paved" ? 2.2 : 1.3}
-              strokeDasharray={r.class === "track" ? "5 4" : undefined}
-            />
-          ))}
-        </g>
-
-        {world.network.towns.map((town) => (
-          <g key={town.id}>
-            <circle cx={sx(town.x)} cy={sy(town.y)} r={2.5} fill={palette.text2} />
-          </g>
-        ))}
 
         {/* hazard areas */}
         {scenario.risk.hazards.map((h) => (
@@ -378,7 +445,7 @@ export function MapView(props: Props) {
             N
           </text>
         </g>
-        <g transform={`translate(${size.w - 24 - scaleLen / v.mpp}, ${size.h - 24})`}>
+        <g transform={`translate(${size.w - 24 - scaleLen / v.mpp}, ${size.h - 52})`}>
           <rect x={-6} y={-20} width={scaleLen / v.mpp + 12} height={28} fill={palette.surface} opacity={0.85} rx={3} />
           <line x1={0} x2={scaleLen / v.mpp} y1={0} y2={0} stroke={palette.text} strokeWidth={2} />
           <line x1={0} x2={0} y1={-4} y2={0} stroke={palette.text} strokeWidth={2} />
@@ -395,6 +462,9 @@ export function MapView(props: Props) {
           : placing
             ? "Click the map to place it · Esc to cancel"
             : "Drag to pan · scroll to zoom · drag markers to move them"}
+      </div>
+      <div className="pmap-attrib">
+        {[...world.attribution, ...(baseLayer === "satellite" && imagery ? [imagery.attribution] : [])].join(" · ")}
       </div>
       <button
         className="pmap-fit"

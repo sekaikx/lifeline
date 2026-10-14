@@ -3,7 +3,7 @@
 use lifeline_core::raster::Raster;
 use lifeline_core::risk::{
     exposure_field, line_of_sight, point_in_polygon, polyline_length, resample, segment_exposure,
-    simplify, survival, viewshed, HazardArea, RiskModel, RiskSite,
+    simplify, survival, viewshed, CellMask, HazardArea, HazardMask, RiskModel, RiskSite,
 };
 use lifeline_core::search::{dijkstra, grid_astar};
 use lifeline_core::terrain::TerrainGrid;
@@ -141,6 +141,7 @@ fn exposure_and_survival() {
             rate_per_min: 0.3,
             impassable: true,
         }],
+        masks: vec![],
     };
     let ground = exposure_field(&t, &risk, 2.0, 1.0);
     assert!(
@@ -237,4 +238,45 @@ fn raster_lookup() {
     assert_eq!(r.cell_of(14.0, 6.0), Some((1, 1)));
     assert_eq!(r.cell_of(-6.0, 0.0), None);
     assert_eq!(r.sample(100.0, 100.0), 0.0);
+}
+
+#[test]
+fn cell_masks_block_and_expose_ground_only() {
+    let t = flat(4_000.0, 80);
+    // flag a 3-cell-wide strip across x = 0 on the 50 m terrain grid
+    let mut cells = Vec::new();
+    for j in 0..t.ny {
+        for i in 39..=41 {
+            cells.push((j * t.nx + i) as u32);
+        }
+    }
+    cells.sort_unstable();
+    let mask = CellMask {
+        x0: t.x0,
+        y0: t.y0,
+        cell: t.dx,
+        nx: t.nx,
+        ny: t.ny,
+        cells,
+    };
+    assert!(mask.contains(0.0, 500.0) && !mask.contains(300.0, 500.0));
+    let risk = RiskModel {
+        sites: vec![],
+        hazards: vec![],
+        masks: vec![HazardMask {
+            id: "W".into(),
+            name: "flood water".into(),
+            mask,
+            rate_per_min: 0.6,
+            impassable: true,
+            source: "test".into(),
+        }],
+    };
+    assert!(risk.validate().is_ok());
+    assert!(risk.blocks([-500.0, 0.0], [500.0, 0.0], 10.0));
+    assert!(!risk.blocks([-500.0, 0.0], [-200.0, 0.0], 10.0));
+    assert!((exposure_field(&t, &risk, 2.0, 1.0).sample(0.0, 0.0) - 0.01).abs() < 1e-6);
+    assert_eq!(exposure_field(&t, &risk, 80.0, 1.0).sample(0.0, 0.0), 0.0);
+    let json = serde_json::to_string(&risk).unwrap();
+    assert_eq!(serde_json::from_str::<RiskModel>(&json).unwrap(), risk);
 }

@@ -15,7 +15,9 @@
 //!   routes behind ridges are safer, and a drone at 60 m is seen from farther
 //!   than a truck on the road;
 //! * a [`HazardArea`] (minefield, flooding, contamination) is a polygon that
-//!   affects ground movement inside it, and can be marked impassable.
+//!   affects ground movement inside it, and can be marked impassable;
+//! * a [`HazardMask`] is the same thing known cell by cell, as produced by
+//!   image analysis such as flood detection.
 //!
 //! Rates are entered per minute, which is how people estimate them, and
 //! stored per second in [`Raster`] fields.
@@ -50,10 +52,50 @@ pub struct HazardArea {
     pub impassable: bool,
 }
 
+/// Cells flagged on a regular grid, stored sparsely (sorted cell indices).
+/// Cell `k = j * nx + i` is the square of side `cell` centred on
+/// `(x0 + i * cell, y0 + j * cell)`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CellMask {
+    pub x0: f64,
+    pub y0: f64,
+    pub cell: f64,
+    pub nx: usize,
+    pub ny: usize,
+    pub cells: Vec<u32>,
+}
+
+impl CellMask {
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        let i = ((x - self.x0) / self.cell).round();
+        let j = ((y - self.y0) / self.cell).round();
+        if i < 0.0 || j < 0.0 || i >= self.nx as f64 || j >= self.ny as f64 {
+            return false;
+        }
+        let k = j as u32 * self.nx as u32 + i as u32;
+        self.cells.binary_search(&k).is_ok()
+    }
+}
+
+/// A hazard known cell by cell rather than as a polygon, typically produced
+/// by image analysis (for example flood water detected in satellite data).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HazardMask {
+    pub id: String,
+    pub name: String,
+    pub mask: CellMask,
+    pub rate_per_min: f64,
+    pub impassable: bool,
+    /// Where the mask came from (sensor, date, method)
+    pub source: String,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RiskModel {
     pub sites: Vec<RiskSite>,
     pub hazards: Vec<HazardArea>,
+    #[serde(default)]
+    pub masks: Vec<HazardMask>,
 }
 
 impl RiskModel {
@@ -80,7 +122,13 @@ impl RiskModel {
     /// True if the segment `a -> b` enters any impassable hazard area.
     pub fn blocks(&self, a: [f64; 2], b: [f64; 2], step: f64) -> bool {
         let impassable: Vec<&HazardArea> = self.hazards.iter().filter(|h| h.impassable).collect();
-        if impassable.is_empty() {
+        let masks: Vec<&CellMask> = self
+            .masks
+            .iter()
+            .filter(|m| m.impassable)
+            .map(|m| &m.mask)
+            .collect();
+        if impassable.is_empty() && masks.is_empty() {
             return false;
         }
         let len = (b[0] - a[0]).hypot(b[1] - a[1]);
@@ -89,6 +137,7 @@ impl RiskModel {
             let t = k as f64 / n as f64;
             let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
             impassable.iter().any(|h| point_in_polygon(p, &h.polygon))
+                || masks.iter().any(|m| m.contains(p[0], p[1]))
         })
     }
 }
@@ -187,6 +236,18 @@ pub fn exposure_field(
                 for i in 0..field.nx {
                     let (x, y) = field.center(i, j);
                     if point_in_polygon([x, y], &h.polygon) {
+                        let k = field.index(i, j);
+                        field.values[k] += rate;
+                    }
+                }
+            }
+        }
+        for m in risk.masks.iter().filter(|m| m.rate_per_min > 0.0) {
+            let rate = (m.rate_per_min / 60.0) as f32;
+            for j in 0..field.ny {
+                for i in 0..field.nx {
+                    let (x, y) = field.center(i, j);
+                    if m.mask.contains(x, y) {
                         let k = field.index(i, j);
                         field.values[k] += rate;
                     }
