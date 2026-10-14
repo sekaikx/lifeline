@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/planner", "crates/cli", "src-tauri"]
+default-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/planner", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator"
+rust-version = "1.80"
+
+[workspace.dependencies]
+lifeline-core = { path = "crates/core" }
+lifeline-airdrop = { path = "crates/airdrop" }
+lifeline-ground = { path = "crates/ground" }
+lifeline-drone = { path = "crates/drone" }
+lifeline-planner = { path = "crates/planner" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+rayon = "1.12"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# The physics is hot-loop numeric code: optimise it even in debug builds so
+# `cargo test` and `tauri dev` stay fast.
+[profile.dev.package.lifeline-core]
+opt-level = 3
+
+[profile.dev.package.lifeline-airdrop]
+opt-level = 3
+
+[profile.dev.package.lifeline-ground]
+opt-level = 3
+
+[profile.dev.package.lifeline-drone]
+opt-level = 3
+
+[profile.dev.package.lifeline-planner]
+opt-level = 3
+
+[workspace.lints.clippy]
+# `!(x > 0.0)` is used on purpose in validation: unlike `x <= 0.0` it also
+# rejects NaN coming in from the UI or a scenario file.
+neg_cmp_op_on_partial_ord = "allow"

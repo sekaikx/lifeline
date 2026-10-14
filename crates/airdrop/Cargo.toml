@@ -1,0 +1,18 @@
+[package]
+name = "lifeline-airdrop"
+description = "Airdrop physics: parachute dynamics, Euler/RK4, release-point solver, Monte Carlo landing dispersion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lifeline-core.workspace = true
+serde.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

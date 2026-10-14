@@ -1,0 +1,16 @@
+[package]
+name = "lifeline-core"
+description = "Shared math and world model: vectors, atmosphere, wind, terrain, line of sight, root finding, statistics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

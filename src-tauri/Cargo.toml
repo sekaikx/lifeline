@@ -1,0 +1,24 @@
+[package]
+name = "lifeline-app"
+description = "Lifeline desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "lifeline_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+lifeline-airdrop.workspace = true
+lifeline-planner.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+
+[lints]
+workspace = true
