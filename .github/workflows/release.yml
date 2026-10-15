@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.1.0 to build installers for Windows, macOS and Linux
-# and publish them as a GitHub release.
+# Builds installers for Windows, macOS and Linux and publishes them as a
+# GitHub release named after the version in src-tauri/tauri.conf.json.
+# Run it from the Actions tab (Run workflow) or push a matching tag.
 on:
   push:
     tags: ["v*"]
@@ -42,8 +43,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Lifeline ${{ github.ref_name }}
+          tagName: v__VERSION__
+          releaseName: Lifeline v__VERSION__
+          releaseCommitish: ${{ github.sha }}
           releaseBody: |
             Installers for Windows, macOS (Apple Silicon and Intel) and Linux.
 
