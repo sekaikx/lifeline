@@ -144,7 +144,8 @@ export function MapView(props: Props) {
     ctx.fillRect(0, 0, size.w, size.h);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    if (baseLayer === "satellite" && satellite?.complete && imagery) {
+    // naturalWidth is 0 for an image that failed to decode; drawing it would throw
+    if (baseLayer === "satellite" && satellite?.complete && satellite.naturalWidth > 0 && imagery) {
       const [w, sBound, e, n] = imagery.bounds;
       ctx.drawImage(satellite, sx(w), sy(n), (e - w) / v.mpp, (n - sBound) / v.mpp);
     } else {

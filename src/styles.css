@@ -180,6 +180,13 @@ h4 {
   margin-bottom: 8px;
 }
 
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 .empty code {
   font-family: var(--mono);
   color: var(--text2);

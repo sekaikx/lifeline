@@ -3,7 +3,7 @@ import { api, errorText } from "../lib/api";
 import { ScenarioPanel } from "./ScenarioPanel";
 import { fmt } from "../lib/format";
 import type { Palette } from "../lib/theme";
-import type { DropReport, MonteCarloReport, NumericsReport, ProfileRow, Scenario } from "./types";
+import { isDropScenario, type DropReport, type MonteCarloReport, type NumericsReport, type ProfileRow, type Scenario } from "./types";
 import { AtmosphereView } from "./views/AtmosphereView";
 import { DispersionView } from "./views/DispersionView";
 import { DropView } from "./views/DropView";
@@ -24,7 +24,8 @@ const STORAGE_KEY = "lifeline.airdrop.v1";
 function loadSaved(): Scenario | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Scenario) : null;
+    const s: unknown = raw ? JSON.parse(raw) : null;
+    return isDropScenario(s) ? s : null;
   } catch {
     return null;
   }
@@ -52,13 +53,16 @@ export function AirdropLab({
   palette,
   onStatus,
   handle,
+  initial,
 }: {
   palette: Palette;
   onStatus: (s: string) => void;
   handle: React.MutableRefObject<LabHandle | null>;
+  /** scenario to start from instead of the saved one (a file opened before the lab was first shown) */
+  initial?: Scenario | null;
 }) {
   const [tab, setTab] = useState<Tab>("drop");
-  const [scenario, setScenario] = useState<Scenario | null>(loadSaved);
+  const [scenario, setScenario] = useState<Scenario | null>(() => initial ?? loadSaved());
   const [drop, setDrop] = useState<DropReport | null>(null);
   const [mc, setMc] = useState<{ key: string; report: MonteCarloReport } | null>(null);
   const [mcBusy, setMcBusy] = useState(false);

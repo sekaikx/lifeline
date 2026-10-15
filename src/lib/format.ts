@@ -10,7 +10,8 @@ export const fmtSci = (v: number | null | undefined): string =>
         ? v.toPrecision(3)
         : v.toExponential(2);
 
-export const fmtInt = (v: number): string => Math.round(v).toLocaleString("en-US");
+// `+ 0` turns -0 (e.g. a sum over nothing) into 0, so it never prints as "-0"
+export const fmtInt = (v: number): string => (Math.round(v) + 0).toLocaleString("en-US");
 
 /** Compass bearing (deg true) of an ENU vector. */
 export const bearing = (east: number, north: number): number =>
@@ -62,4 +63,4 @@ export const fmtKg = (kg: number): string =>
 
 export const fmtPct = (p: number, digits = 0): string => `${(p * 100).toFixed(digits)}%`;
 
-export const fmtMoney = (v: number): string => Math.round(v).toLocaleString("en-US");
+export const fmtMoney = (v: number): string => (Math.round(v) + 0).toLocaleString("en-US");

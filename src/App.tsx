@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AirdropLab, type LabHandle } from "./airdrop/AirdropLab";
-import type { Scenario as DropScenario } from "./airdrop/types";
+import { isDropScenario, type Scenario as DropScenario } from "./airdrop/types";
 import { api, errorText, hasBackend } from "./lib/api";
 import { applyTheme, initialTheme, palettes, type ThemeMode } from "./lib/theme";
 import { PlanWorkspace, type WorkspaceHandle } from "./plan/PlanWorkspace";
-import type { PlanScenario } from "./plan/types";
+import { isPlanScenario } from "./plan/types";
 
 type Workspace = "plan" | "lab";
 
@@ -15,6 +15,9 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const planHandle = useRef<WorkspaceHandle | null>(null);
   const labHandle = useRef<LabHandle | null>(null);
+  // a lab scenario opened before the lab was first shown
+  const [labInitial, setLabInitial] = useState<DropScenario | null>(null);
+  const noticeTimer = useRef(0);
   const palette = palettes[theme];
 
   useEffect(() => {
@@ -28,7 +31,8 @@ export default function App() {
 
   const flash = (msg: string) => {
     setNotice(msg);
-    window.setTimeout(() => setNotice(null), 3500);
+    window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 3500);
   };
 
   if (!hasBackend()) {
@@ -47,7 +51,7 @@ export default function App() {
   const save = async () => {
     const s = workspace === "plan" ? planHandle.current?.scenario : labHandle.current?.scenario;
     if (!s) return;
-    const base = s.name.replace(/[^\w-]+/g, "-").toLowerCase() || "scenario";
+    const base = (s.name ?? "").replace(/[^\w-]+/g, "-").toLowerCase() || "scenario";
     try {
       const path = await api.saveText(`${base}.json`, "json", JSON.stringify(s, null, 2));
       if (path) flash(`Saved ${path}`);
@@ -60,18 +64,18 @@ export default function App() {
     try {
       const text = await api.openText();
       if (!text) return;
-      const data = JSON.parse(text);
-      // a planning scenario has requests; an airdrop scenario has a payload
-      if (Array.isArray(data.requests)) {
-        planHandle.current?.setScenario(data as PlanScenario);
+      const data: unknown = JSON.parse(text);
+      if (isPlanScenario(data)) {
+        planHandle.current?.setScenario(data);
         setWorkspace("plan");
-      } else if (data.payload && data.aircraft) {
-        labHandle.current?.setScenario(data as DropScenario);
+      } else if (isDropScenario(data)) {
+        if (labHandle.current) labHandle.current.setScenario(data);
+        else setLabInitial(data);
         setWorkspace("lab");
       } else {
-        throw new Error("not a Lifeline scenario file");
+        throw new Error("Not a Lifeline scenario file, or one with missing sections");
       }
-      flash(`Opened ${data.name ?? "scenario"}`);
+      flash(`Opened ${data.name || "scenario"}`);
     } catch (e) {
       flash(errorText(e));
     }
@@ -118,7 +122,7 @@ export default function App() {
         <PlanWorkspace palette={palette} theme={theme} onStatus={setStatus} handle={planHandle} />
       </div>
       <div className="workspace" hidden={workspace !== "lab"}>
-        {workspace === "lab" || labHandle.current ? <AirdropLab palette={palette} onStatus={setStatus} handle={labHandle} /> : null}
+        {workspace === "lab" || labHandle.current ? <AirdropLab palette={palette} onStatus={setStatus} handle={labHandle} initial={labInitial} /> : null}
       </div>
     </div>
   );

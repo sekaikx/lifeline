@@ -50,7 +50,7 @@ jobs:
             | System | File |
             | --- | --- |
             | Windows 10 and 11 | `Lifeline_*_x64-setup.exe` (or the `.msi`) |
-            | macOS 11 or later | `Lifeline_*_universal.dmg` |
+            | macOS 10.15 or later | `Lifeline_*_universal.dmg` |
             | Linux | `Lifeline_*_amd64.AppImage` or `.deb` |
 
             The installers are not code-signed yet. On Windows, SmartScreen may show "Windows protected your PC": choose More info, then Run anyway. On macOS, right-click the app, choose Open, then confirm.

@@ -299,3 +299,33 @@ export interface Plan {
   };
   compute_ms: number;
 }
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * Shape check for scenarios from files or storage: enough that the UI can
+ * render them. Values are validated by the engine, which reports errors.
+ */
+export function isPlanScenario(v: unknown): v is PlanScenario {
+  if (!isObj(v) || !isObj(v.world) || !isObj(v.depot) || !Array.isArray(v.requests)) return false;
+  if (v.world.type !== "generated" && v.world.type !== "real") return false;
+  const { fleet, risk, weather } = v;
+  // files saved before flood masks existed have none; the engine defaults them too
+  if (isObj(risk) && risk.masks === undefined) risk.masks = [];
+  return (
+    isObj(fleet) &&
+    isObj(fleet.trucks) &&
+    isObj(fleet.trucks.truck) &&
+    isObj(fleet.drones) &&
+    isObj(fleet.drones.drone) &&
+    isObj(fleet.aircraft) &&
+    isObj(fleet.aircraft.bundle) &&
+    isObj(risk) &&
+    Array.isArray(risk.sites) &&
+    Array.isArray(risk.hazards) &&
+    Array.isArray(risk.masks) &&
+    isObj(weather) &&
+    isObj(weather.wind) &&
+    isObj(v.settings)
+  );
+}

@@ -201,3 +201,19 @@ export interface ProfileRow {
   wind_east: number;
   wind_north: number;
 }
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Shape check for scenarios from files or storage; the engine validates values. */
+export function isDropScenario(v: unknown): v is Scenario {
+  if (!isObj(v) || !isObj(v.payload) || !isObj(v.environment) || !isObj(v.monte_carlo)) return false;
+  return (
+    isObj(v.environment.atmosphere) &&
+    isObj(v.environment.wind) &&
+    isObj(v.terrain) &&
+    isObj(v.aircraft) &&
+    Array.isArray(v.target) &&
+    isObj(v.integrator) &&
+    isObj(v.monte_carlo.uncertainty)
+  );
+}

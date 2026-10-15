@@ -6,7 +6,7 @@ import { MapView, modeColor, type BaseLayer, type Placing, type RiskLayer } from
 import { PlanPanel } from "./PlanPanel";
 import { floodSummary, SetupPanel, type DataActions } from "./SetupPanel";
 import { Timeline } from "./Timeline";
-import type { Area, Imagery, Plan, PlanScenario, Request, RiskLayers, World } from "./types";
+import { isPlanScenario, type Area, type Imagery, type Plan, type PlanScenario, type Request, type RiskLayers, type World } from "./types";
 
 const STORAGE_KEY = "lifeline.plan.v2";
 
@@ -18,7 +18,8 @@ const areaOf = (s: PlanScenario | null): Area | null =>
 function loadSaved(): PlanScenario | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PlanScenario) : null;
+    const s: unknown = raw ? JSON.parse(raw) : null;
+    return isPlanScenario(s) ? s : null;
   } catch {
     return null;
   }
@@ -59,6 +60,7 @@ export function PlanWorkspace({
   const [imagery, setImagery] = useState<{ key: string; data: Imagery } | null>(null);
   const [flood, setFlood] = useState<string | null>(null);
   const [waterModel, setWaterModel] = useState<string | null>(null);
+  const [worldAttempt, setWorldAttempt] = useState(0);
 
   useEffect(() => {
     api
@@ -86,8 +88,9 @@ export function PlanWorkspace({
   const reset = useCallback(() => loadArea(areaOf(scenario)), [loadArea, scenario]);
 
   useEffect(() => {
-    if (!scenario && !busy) loadArea(null);
-  }, [scenario, busy, loadArea]);
+    // stop after a failure instead of retrying in a loop; the error offers a retry
+    if (!scenario && !busy && !error) loadArea(null);
+  }, [scenario, busy, error, loadArea]);
 
   handle.current = { scenario, setScenario: (s) => { setScenario(s); setSelected(null); }, reset };
 
@@ -113,7 +116,7 @@ export function PlanWorkspace({
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specKey]);
+  }, [specKey, worldAttempt]);
 
   // satellite imagery, fetched when the layer is first shown for an area
   const area = areaOf(scenario);
@@ -174,6 +177,24 @@ export function PlanWorkspace({
         <div>
           <p>{error ?? busy ?? "Loading the area…"}</p>
           {!error && area && <p className="note">Elevation and OpenStreetMap data download once and are cached.</p>}
+          {error && !busy && (
+            <p className="empty-actions">
+              {scenario && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setError(null);
+                    setWorldAttempt((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              )}
+              <button className="btn" onClick={() => loadArea(null)}>
+                Start over on generated terrain
+              </button>
+            </p>
+          )}
         </div>
       </div>
     );

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { NumberField, SelectField } from "../components/Field";
 import { fmt, fmtClock, fmtKg, fmtMoney, fmtPct } from "../lib/format";
 import type { Palette } from "../lib/theme";
@@ -51,6 +52,7 @@ export function PlanPanel(props: Props) {
             {props.adding ? "Click the map…" : "Add request"}
           </button>
         </div>
+        {scenario.requests.length === 0 && <p className="note">No requests yet. Choose Add request, then click the map where supplies are needed.</p>}
         {(["critical", "high", "routine"] as Priority[]).map((p) => {
           const rows = scenario.requests.filter((r) => r.priority === p);
           if (!rows.length) return null;
@@ -159,8 +161,13 @@ function RequestDetail({
   onDelete: () => void;
 }) {
   const options = a?.options ?? [];
+  // bring the detail into view when a request is selected, not on every replan
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [r.id]);
   return (
-    <section className="panel-block detail" ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} key={r.id}>
+    <section className="panel-block detail" ref={ref} key={r.id}>
       <div className="block-head">
         <h2>
           {r.id} · {r.name}

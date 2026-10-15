@@ -21,15 +21,26 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; script-src 'self'; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; script-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
-    "category": "Education",
-    "shortDescription": "Resupply planning under uncertainty",
-    "longDescription": "Plans deliveries by truck, drone and airdrop over real terrain, with line-of-sight risk, wind-aware drone range and Monte Carlo airdrop accuracy."
+    "publisher": "sekaikx",
+    "copyright": "Copyright (c) 2026 sekaikx. MIT License.",
+    "homepage": "https://github.com/sekaikx/lifeline",
+    "license": "MIT",
+    "category": "Productivity",
+    "shortDescription": "Resupply planning by truck, drone and airdrop",
+    "longDescription": "Plans deliveries by truck, drone and parachute airdrop on real terrain, OpenStreetMap roads, weather forecasts and Sentinel-2 imagery, with line-of-sight risk, wind-aware drone range, Monte Carlo airdrop accuracy and satellite flood detection.",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": { "installMode": "currentUser" }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
   }
 }

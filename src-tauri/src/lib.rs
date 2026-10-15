@@ -258,6 +258,12 @@ async fn save_text(
     if !matches!(extension.as_str(), "json" | "csv") {
         return Err("only .json and .csv exports are supported".into());
     }
+    // The UI only suggests a name; keep it a bare file name so it can never
+    // steer the dialog into another folder.
+    let default_name = std::path::Path::new(&default_name).file_name().map_or_else(
+        || format!("lifeline.{extension}"),
+        |n| n.to_string_lossy().into_owned(),
+    );
     compute(move || {
         let Some(path) = app
             .dialog()

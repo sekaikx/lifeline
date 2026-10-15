@@ -27,7 +27,8 @@ export function DispersionView({
     if (!mc) return null;
     const [tx, ty] = scenario.target;
     const miss = mc.result.impacts.map(([e, n]) => Math.hypot(e - tx, n - ty));
-    const max = Math.max(...miss, 1);
+    // a loop, not Math.max(...miss): spreading 10^5 samples overflows the call stack
+    const max = miss.reduce((a, b) => Math.max(a, b), 1);
     const bins = 30;
     const w = max / bins;
     const counts = new Array(bins).fill(0);
