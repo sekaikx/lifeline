@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.1.0 to build installers for Windows, macOS and Linux
-# and attach them to a draft GitHub release.
+# and publish them as a GitHub release.
 on:
   push:
     tags: ["v*"]
@@ -23,8 +23,8 @@ jobs:
             args: ""
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -44,5 +44,18 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Lifeline ${{ github.ref_name }}
-          releaseDraft: true
+          releaseBody: |
+            Installers for Windows, macOS (Apple Silicon and Intel) and Linux.
+
+            | System | File |
+            | --- | --- |
+            | Windows 10 and 11 | `Lifeline_*_x64-setup.exe` (or the `.msi`) |
+            | macOS 11 or later | `Lifeline_*_universal.dmg` |
+            | Linux | `Lifeline_*_amd64.AppImage` or `.deb` |
+
+            The installers are not code-signed yet. On Windows, SmartScreen may show "Windows protected your PC": choose More info, then Run anyway. On macOS, right-click the app, choose Open, then confirm.
+
+            See the [README](https://github.com/sekaikx/lifeline#readme) for what Lifeline does and how to use it.
+          releaseDraft: false
+          prerelease: false
           args: ${{ matrix.args }}
