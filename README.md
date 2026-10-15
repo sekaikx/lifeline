@@ -46,6 +46,7 @@ free and has no account, telemetry or licence key.
 | | [`Lifeline_0.1.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
 | macOS, Apple silicon and Intel | [`Lifeline_0.1.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
 | Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.1.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
+| Fedora, RHEL, openSUSE | [`Lifeline-0.1.0-1.x86_64.rpm`](https://github.com/sekaikx/lifeline/releases/latest) | RPM package; install with dnf or zypper |
 | Other Linux, x86-64 | [`Lifeline_0.1.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
 
 The installers are not code-signed yet, so Windows and macOS warn the first
