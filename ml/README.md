@@ -98,7 +98,8 @@ python -m venv .venv && . .venv/bin/activate
 pip install -r ml/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 python ml/download.py          # about 1 GB into ml/data/
 python ml/train.py --scales 1,2 # about an hour on four CPU cores
-python ml/evaluate.py          # the tables above
+python ml/evaluate.py          # the tables above, at 10 m
+python ml/evaluate.py --scale 2 # and at 20 m
 python ml/export_onnx.py       # ml/runs/water-unet.onnx, checked against PyTorch
 python ml/field_check.py       # the L2A check
 ```

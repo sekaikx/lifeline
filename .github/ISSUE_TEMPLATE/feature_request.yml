@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest something Lifeline should do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to plan or decide, and where does Lifeline fall short today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How it could work. Rough is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Who would use it, data sources it would need, references, alternatives you have tried.

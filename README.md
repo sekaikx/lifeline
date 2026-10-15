@@ -4,17 +4,23 @@
 </picture>
 
 <p align="center">
-  <a href="#what-it-does">What it does</a> ·
+  <a href="#download">Download</a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#recognising-floods-from-satellite-images">Flood recognition</a> ·
-  <a href="#running-it">Run it</a> ·
   <a href="docs/physics.md">Physics</a> ·
-  <a href="ml/README.md">Model training</a>
+  <a href="ml/README.md">Model training</a> ·
+  <a href="#building-from-source">Build</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sekaikx/lifeline/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/sekaikx/lifeline/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-2f6fc6"></a>
 </p>
 
 # Lifeline
 
-**Open-source resupply planner for disaster response and contested logistics.**
-Lifeline decides how to get supplies to places that are hard or dangerous to
+Lifeline is an open-source resupply planner for disaster response and
+contested logistics. It decides how to get supplies to places that are hard or dangerous to
 reach: by truck on the real road network, by drone, or by parachute airdrop.
 It works on real terrain, OpenStreetMap roads, live weather forecasts and
 Sentinel-2 satellite imagery, recognises flooded land with a trained neural
@@ -27,6 +33,81 @@ It runs on one laptop (Windows, macOS, Linux) and keeps working offline once
 an area has been loaded.
 
 ![Lifeline planning seven deliveries around Gorkha, Nepal: truck routes, a drone flight and an airdrop on real terrain](docs/img/plan.png)
+
+## Download
+
+Installers for Windows, macOS and Linux are attached to each
+[release](https://github.com/sekaikx/lifeline/releases/latest). Lifeline is
+free and has no account, telemetry or licence key.
+
+| System | File | Notes |
+| --- | --- | --- |
+| Windows 10 and 11, 64-bit | [`Lifeline_0.1.0_x64-setup.exe`](https://github.com/sekaikx/lifeline/releases/latest) | Installer, the usual choice |
+| | [`Lifeline_0.1.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
+| macOS, Apple silicon and Intel | [`Lifeline_0.1.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
+| Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.1.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
+| Other Linux, x86-64 | [`Lifeline_0.1.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
+
+The installers are not code-signed yet, so Windows and macOS warn the first
+time you open Lifeline.
+
+<details>
+<summary>Opening an unsigned build on Windows and macOS</summary>
+
+<br>
+
+On Windows, SmartScreen shows "Windows protected your PC". Choose *More
+info*, then *Run anyway*. This happens once per download.
+
+On macOS, Gatekeeper refuses to open the app on the first try. Open
+*System Settings > Privacy & Security*, scroll to *Security*, choose *Open
+Anyway* next to the message about Lifeline and confirm. On macOS 14 and
+earlier, Control-clicking the app in Finder and choosing *Open* does the
+same. If macOS instead says the app "is damaged", the download has been
+quarantined; clear the flag and open it again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Lifeline.app
+```
+
+If you would rather not run an unsigned binary, [build it from
+source](#building-from-source).
+
+</details>
+
+Loading a new area needs an internet connection; after that the area works
+offline. The trained flood model is not included (see
+[below](#recognising-floods-from-satellite-images)), so out of the box the
+flood check uses the water index.
+
+## Quick start
+
+What to try in the first five minutes.
+
+1. Open Lifeline. It starts on a generated valley, so there is a plan to
+   look at before anything is downloaded.
+2. In *Area* at the top left, set *Load* to *Gorkha,
+   Nepal* and press *Load area and example plan*. The first load fetches
+   elevation, roads, settlements and the wind forecast for a 30 km square and
+   takes a minute or so; later loads come from the cache.
+3. Read the plan. The panel on the right starts with how much of the
+   demand is expected to arrive, then whether the critical requests are on
+   time, the last arrival, the operating cost and the risk tolerance. Below
+   it, requests are grouped by priority with their arrival time against the
+   deadline. Click one to compare its truck, drone and airdrop options side by
+   side. The fleet timeline under the map shows what every vehicle is doing,
+   hour by hour. Switch *Exposure* on the map to *Ground*, *Drone* or
+   *Aircraft* to see what the observed areas can see at each height.
+4. Try the flood check. Load *Dadu, Pakistan*, a 40 km square on the
+   Indus. Under *Risk*, in *Satellite flood check*, set *As of* to
+   5 September 2022 and press *Detect new water*. Newly flooded land is
+   added as an impassable area and the plan is recomputed around it. Repeat
+   with 5 September 2021 to see the same ground a year before the flood.
+5. *Save* writes the scenario as JSON. *Open* reads it back, and
+   the [`lifeline` command](#command-line) plans the same file.
+
+Everything on the map can be dragged: the depot, requests and observed areas.
+The plan updates as you go.
 
 ## What it does
 
@@ -117,10 +198,10 @@ Scored on held-out hand-labelled scenes (pixels pooled per split):
 | Water index, threshold tuned on training data | 0.787 | 0.703 |
 | U-Net | **0.858** | **0.811** |
 
-Precision rises from 0.76 to 0.93 on the test split at the same recall
-(0.95 and 0.91): the network keeps most of the index's sensitivity and
-raises far fewer false alarms. At the 20 m resolution the
-app runs it at, the U-Net scores 0.846 and 0.793.
+Precision rises from 0.76 to 0.93 on the test split at about the same
+recall (0.95 and 0.91): the network keeps most of the index's sensitivity
+and raises far fewer false alarms. At the 20 m resolution the app runs it
+at, the U-Net scores 0.846 and 0.793.
 
 On the 2022 Indus flood, both detectors find the event and stay quiet a year
 earlier:
@@ -135,6 +216,12 @@ carries no explicit licence, so the model you use is one you train yourself
 (about an hour on a laptop CPU, see [`ml/README.md`](ml/README.md)). Without
 a model the app uses the water index and does not show the detector choice.
 
+To use a trained model, put `water-unet.onnx` in
+`~/.local/share/lifeline/models/` on Linux,
+`~/Library/Application Support/lifeline/models/` on macOS or
+`%APPDATA%\lifeline\models\` on Windows, or point the `LIFELINE_WATER_MODEL`
+environment variable at the file.
+
 ## Data sources
 
 | Data | Source | Terms |
@@ -147,14 +234,17 @@ a model the app uses the water index and does not show the detector choice.
 | Permanent water | [ESA WorldCover 2021](https://esa-worldcover.org/) | CC BY 4.0 |
 | Flood training labels | [Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11), hand-labelled split | no explicit licence; used for training only |
 
-Responses are cached on disk (`~/.cache/lifeline` on Linux), so an area loads
-from the network once and then works offline. Attribution is shown on the
-map.
+Responses are cached on disk (`~/.cache/lifeline` on Linux,
+`~/Library/Caches/lifeline` on macOS, `%LOCALAPPDATA%\lifeline` on Windows),
+so an area loads from the network once and then works offline. Attribution
+is shown on the map.
 
 ## Under the hood
 
 <details>
 <summary><b>How the numbers are made</b></summary>
+
+<br>
 
 | | Model |
 | --- | --- |
@@ -172,6 +262,8 @@ assumptions.
 <details>
 <summary><b>Tests</b></summary>
 
+<br>
+
 `cargo test` runs 69 tests. Among them:
 
 - RK4 beats Euler at every equal step size by more than 100×, and the
@@ -187,14 +279,19 @@ assumptions.
 - The ONNX runner gives the same answer across tile seams as on a single
   tile.
 
+`lifeline airdrop numerics` prints the convergence studies behind the first
+of these:
+
 ```
-Projectile with drag, ISA and shear wind (error at t = 10 s)
+Projectile with drag, ISA and shear wind (error at t = 10 s vs RK4 at dt/64)
      dt [s]      Euler [m]        RK4 [m]
     1.00000        3.882e1       1.594e-3
     0.50000        1.924e1       9.489e-5
     0.25000        9.580e0       5.774e-6
     0.12500        4.780e0       3.558e-7
     0.06250        2.388e0       2.208e-8
+    0.03125        1.193e0       1.378e-9
+    0.01562       5.965e-1      8.960e-11
   observed order: Euler 1.00, RK4 4.01
 ```
 
@@ -202,6 +299,8 @@ Projectile with drag, ISA and shear wind (error at t = 10 s)
 
 <details>
 <summary><b>Repository layout</b></summary>
+
+<br>
 
 ```
 crates/core       terrain, atmosphere, wind, line of sight, exposure, search, statistics
@@ -219,24 +318,23 @@ docs              physics derivation, screenshots
 
 </details>
 
-## Running it
+## Building from source
 
-You need [Rust](https://rustup.rs) 1.91 or newer, Node 20.19 or newer, and
-the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
+You need [Rust](https://rustup.rs) 1.91 or newer, Node 20.19 or 22.12 or
+newer, and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
 for your OS.
 
 ```bash
+git clone https://github.com/sekaikx/lifeline.git
+cd lifeline
 npm install
 npm run tauri dev        # desktop app with hot reload
 npm run tauri build      # installer for your OS
 ```
 
-Pushing a tag such as `v0.1.0` builds Windows, macOS and Linux installers in
-GitHub Actions and attaches them to a draft release.
-
-To use a trained flood model, put `water-unet.onnx` in
-`~/.local/share/lifeline/models/` (Linux; the platform data directory
-elsewhere) or point `LIFELINE_WATER_MODEL` at the file.
+Pushing a tag such as `v0.1.0` builds the Windows, macOS and Linux
+installers in GitHub Actions and attaches them to a release. Checks, tests
+and style notes for contributors are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Command line
 
@@ -248,11 +346,13 @@ through cargo:
 cargo run --release -p lifeline-cli -- example --lat 28.0 --lon 84.63 --name Gorkha > gorkha.json
 cargo run --release -p lifeline-cli -- plan -s gorkha.json [--json]
 cargo run --release -p lifeline-cli -- wind --lat 28.0 --lon 84.63
+cargo run --release -p lifeline-cli -- example --lat 26.75 --lon 67.75 --size-km 40 --name Dadu > dadu.json
 cargo run --release -p lifeline-cli -- flood -s dadu.json --date 2022-09-05 [--model water-unet.onnx]
 cargo run --release -p lifeline-cli -- airdrop montecarlo -n 10000
 ```
 
-Scenario files are the same JSON that the app's Save button writes.
+Scenario files are the same JSON that the app's Save button writes. Without
+`-s`, `plan` uses the generated valley.
 
 ## Limits
 
@@ -275,6 +375,13 @@ estimates, to be checked by people who know the ground.
 - The first load of a large area can take a minute or two while the road
   network downloads.
 
+## Contributing
+
+Bug reports and pull requests are welcome; [CONTRIBUTING.md](CONTRIBUTING.md)
+explains how to build, test and what CI checks. Please report security
+problems privately, as described in [SECURITY.md](SECURITY.md). Changes
+between versions are listed in [CHANGELOG.md](CHANGELOG.md).
+
 ## Citing
 
 If Lifeline is useful in your work, GitHub's "Cite this repository" button
@@ -282,4 +389,5 @@ gives a reference generated from [CITATION.cff](CITATION.cff).
 
 ## License
 
-MIT. Data keeps the terms of its source (see [Data sources](#data-sources)).
+MIT, see [LICENSE](LICENSE). Data keeps the terms of its source (see
+[Data sources](#data-sources)).
