@@ -7,7 +7,7 @@ default-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/dro
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator"
+repository = "https://github.com/sekaikx/lifeline"
 rust-version = "1.91"
 
 [workspace.dependencies]

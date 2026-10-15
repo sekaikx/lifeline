@@ -172,24 +172,32 @@ pub(crate) fn parse_npy(b: &[u8]) -> Result<Array, String> {
     let data: Vec<f64> = match descr {
         "|u1" | "<u1" => raw.iter().take(n).map(|v| f64::from(*v)).collect(),
         "<u2" => raw
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .take(n)
-            .map(|c| f64::from(u16::from_le_bytes([c[0], c[1]])))
+            .map(|c| f64::from(u16::from_le_bytes(*c)))
             .collect(),
         "<i2" => raw
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .take(n)
-            .map(|c| f64::from(i16::from_le_bytes([c[0], c[1]])))
+            .map(|c| f64::from(i16::from_le_bytes(*c)))
             .collect(),
         "<f4" => raw
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .take(n)
-            .map(|c| f64::from(f32::from_le_bytes([c[0], c[1], c[2], c[3]])))
+            .map(|c| f64::from(f32::from_le_bytes(*c)))
             .collect(),
         "<f8" => raw
-            .chunks_exact(8)
+            .as_chunks::<8>()
+            .0
+            .iter()
             .take(n)
-            .map(|c| f64::from_le_bytes(c.try_into().unwrap()))
+            .map(|c| f64::from_le_bytes(*c))
             .collect(),
         other => return Err(format!("npy: unsupported dtype {other}")),
     };

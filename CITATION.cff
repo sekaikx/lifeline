@@ -4,7 +4,7 @@ title: "Lifeline: resupply planning by truck, drone and airdrop on real terrain,
 type: software
 authors:
   - alias: sekaikx
-repository-code: "https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator"
+repository-code: "https://github.com/sekaikx/lifeline"
 license: MIT
 version: 0.1.0
 date-released: 2026-10-15

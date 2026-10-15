@@ -71,7 +71,12 @@ pub fn imagery(fetcher: &Fetcher, area: &Area, max_px: usize) -> Result<Imagery,
             return Err(format!("unexpected imagery format {w}x{h}x{c}"));
         }
         let mut filled = false;
-        for (dst, src) in rgba.chunks_exact_mut(4).zip(px.chunks_exact(4)) {
+        for (dst, src) in rgba
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(px.as_chunks::<4>().0)
+        {
             if dst[3] == 0 && src[3] > 0 {
                 dst.copy_from_slice(src);
                 filled = true;
@@ -84,7 +89,7 @@ pub fn imagery(fetcher: &Fetcher, area: &Area, max_px: usize) -> Result<Imagery,
                 cloud: item.cloud,
             });
         }
-        if rgba.chunks_exact(4).all(|p| p[3] > 0) {
+        if rgba.as_chunks::<4>().0.iter().all(|p| p[3] > 0) {
             break;
         }
     }

@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 const USER_AGENT: &str = concat!(
     "Lifeline/",
     env!("CARGO_PKG_VERSION"),
-    " (resupply planner; https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator)"
+    " (resupply planner; https://github.com/sekaikx/lifeline)"
 );
 
 pub struct Fetcher {
