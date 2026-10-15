@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Lifeline, please cite it as below."
+title: "Lifeline: resupply planning by truck, drone and airdrop on real terrain, roads, weather and satellite imagery"
+type: software
+authors:
+  - alias: sekaikx
+repository-code: "https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator"
+license: MIT
+version: 0.1.0
+date-released: 2026-10-15
+abstract: >-
+  Lifeline is a desktop planner for humanitarian and contested resupply. For
+  each delivery it compares a truck on the OpenStreetMap road network, a
+  drone, and a parachute airdrop with a computed release point, using real
+  elevation, wind forecasts and line-of-sight exposure, and schedules the
+  fleet by priority, deadline, risk tolerance and cost. A flood check marks
+  newly flooded land in Sentinel-2 imagery with a water index or a U-Net
+  trained on Sen1Floods11.
+keywords:
+  - humanitarian logistics
+  - disaster response
+  - airdrop
+  - drone delivery
+  - route planning
+  - flood mapping
+  - Sentinel-2
+  - OpenStreetMap

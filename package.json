@@ -2,6 +2,24 @@
   "name": "lifeline",
   "private": true,
   "version": "0.1.0",
+  "description": "Desktop resupply planner: truck, drone and airdrop options on real terrain, OpenStreetMap roads, weather and Sentinel-2 flood detection",
+  "keywords": [
+    "humanitarian-logistics",
+    "disaster-response",
+    "resupply",
+    "airdrop",
+    "drone-delivery",
+    "route-planning",
+    "flood-mapping",
+    "sentinel-2",
+    "openstreetmap",
+    "tauri"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sekaikx/Trajectory-and-Airdrop-Simulator"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

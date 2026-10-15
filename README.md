@@ -1,58 +1,64 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/banner-dark.svg">
+  <img alt="Lifeline: resupply planning by truck, drone and airdrop" src="docs/brand/banner-light.svg" width="100%">
+</picture>
+
+<p align="center">
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#recognising-floods-from-satellite-images">Flood recognition</a> ·
+  <a href="#running-it">Run it</a> ·
+  <a href="docs/physics.md">Physics</a> ·
+  <a href="ml/README.md">Model training</a>
+</p>
+
 # Lifeline
 
-Lifeline is a desktop planner for getting supplies to places that are hard or
-dangerous to reach. For each delivery it compares a truck, a drone and a
-parachute drop on real terrain, roads, weather and satellite imagery, then
-builds a schedule: which vehicle goes where, when the supplies arrive, how
-likely they are to arrive intact, and what it costs.
+**Open-source resupply planner for disaster response and contested logistics.**
+Lifeline decides how to get supplies to places that are hard or dangerous to
+reach: by truck on the real road network, by drone, or by parachute airdrop.
+It works on real terrain, OpenStreetMap roads, live weather forecasts and
+Sentinel-2 satellite imagery, recognises flooded land with a trained neural
+network, and produces a schedule that says which vehicle goes where, when the
+supplies arrive, how likely they are to arrive intact, and what it costs.
 
-It is meant for the planning cell of a relief operation, or a logistics unit
+It is built for the planning cell of a relief operation, or a logistics unit
 working where roads are cut, the weather matters and some areas are unsafe.
-It runs on one laptop and keeps working offline once an area has been loaded.
+It runs on one laptop (Windows, macOS, Linux) and keeps working offline once
+an area has been loaded.
 
-![Plan for seven deliveries around Gorkha, Nepal](docs/img/plan.png)
+![Lifeline planning seven deliveries around Gorkha, Nepal: truck routes, a drone flight and an airdrop on real terrain](docs/img/plan.png)
 
 ## What it does
 
-Pick a preset or any latitude and longitude, and Lifeline downloads the
-elevation, the OpenStreetMap road network and settlements, and a wind
-forecast. It then proposes an example set of deliveries to real villages, so
-there is something to plan straight away.
+1. Load any place. Pick a preset or a latitude and longitude. Lifeline
+   downloads the elevation, the road network and settlements, and a wind
+   forecast, then proposes example deliveries to real villages.
+2. Mark what is unsafe. An observed area (a checkpoint, a hostile
+   position, a crowd) puts at risk what it can see; Lifeline computes that
+   from the terrain for vehicles on the ground, drones at cruise height and
+   aircraft at drop height. Hazard zones close roads or add risk. The flood
+   check marks newly flooded land from recent satellite images and closes
+   the roads that cross it.
+3. Compare three ways to deliver. Every request gets a truck, a drone and
+   an airdrop option, each with its time, trips, probability of arrival and
+   cost.
+4. Get a schedule. Requests are served by priority, then deadline. Each
+   gets the cheapest option that meets the risk tolerance and arrives on
+   time; failing that, the earliest; failing that, the safest. A simple rule
+   a planner can follow and defend, not a black box.
 
-You mark where it is unsafe. An observed area (a checkpoint, a hostile
-position, a crowd) puts at risk anything it can see, and Lifeline works out
-what it can see from the terrain, separately for trucks on the ground, drones
-at cruise height and aircraft at drop height. A hazard zone either closes the
-roads through it or adds to the risk of using them. The satellite flood check
-marks newly flooded land in recent Sentinel-2 images and closes the roads
-that cross it.
+| | Truck | Drone | Airdrop |
+| --- | --- | --- | --- |
+| Path | OpenStreetMap roads, off-road legs where no road reaches | Straight or detoured flight over the terrain | Aircraft track to a computed release point |
+| Limited by | Road class, gradient, closed roads | Battery energy, wind, radio line of sight | Wind, release timing, drop zone size |
+| Risk | Exposure along the route, trading time against safety | Exposure at cruise height | Exposure at drop height, chance of landing in the zone |
+| Good for | Bulk loads on open roads | Small urgent loads: blood, vaccines | Places no road reaches in time |
 
-Every delivery gets three options. A truck takes the road route, with
-alternatives that trade time against exposure and off-road legs where no
-road reaches. A drone flies an energy-limited path that accounts for the
-wind, and the plan shows whether its radio link to the depot holds. An
-aircraft drops by parachute: Lifeline finds the release point it must fly to,
-the landing spread from a Monte Carlo of wind and timing errors, and the
-chance of landing in the drop zone. Each option carries its time, number of
-trips, probability of arrival and cost.
-
-The scheduler takes deliveries by priority, then deadline. Each gets the
-cheapest option that meets the risk tolerance and arrives on time; if none
-is on time, the earliest; if none meets the tolerance, the safest. The rule
-is deliberately simple so that a planner can follow and defend every
-decision. It is not a global optimum.
-
-A separate airdrop lab shows one drop in 3-D with the physics behind it:
-release point, drift, dispersion ellipses, the atmosphere and wind profile,
-and a check of the numerical method.
-
-| Satellite layer | Flood check, Dadu, September 2022 |
+| Satellite layer over Gorkha | Flood check, Dadu, September 2022 |
 | --- | --- |
-| ![Sentinel-2 imagery over Gorkha](docs/img/satellite.png) | ![New water detected around Dadu](docs/img/flood.png) |
-
-| Option comparison for one delivery | Airdrop lab |
-| --- | --- |
-| ![Truck, drone and airdrop compared](docs/img/plan-request.png) | ![Airdrop physics lab](docs/img/airdrop-lab.png) |
+| ![Sentinel-2 true-colour imagery under the plan](docs/img/satellite.png) | ![Flooded land detected by the trained network, closing roads around Dadu](docs/img/flood.png) |
+| **Truck, drone and airdrop compared for one request** | **Airdrop lab: release point and descent in 3-D** |
+| ![Option comparison panel with route alternatives](docs/img/plan-request.png) | ![Parachute drop simulation with wind profile](docs/img/airdrop-lab.png) |
 
 ## A worked example
 
@@ -145,7 +151,10 @@ Responses are cached on disk (`~/.cache/lifeline` on Linux), so an area loads
 from the network once and then works offline. Attribution is shown on the
 map.
 
-## How the numbers are made
+## Under the hood
+
+<details>
+<summary><b>How the numbers are made</b></summary>
 
 | | Model |
 | --- | --- |
@@ -158,7 +167,10 @@ The planning engine is written in Rust with no UI dependencies. The
 documentation of each crate (`cargo doc --open`) describes its model and
 assumptions.
 
-## Tests
+</details>
+
+<details>
+<summary><b>Tests</b></summary>
 
 `cargo test` runs 69 tests. Among them:
 
@@ -185,6 +197,27 @@ Projectile with drag, ISA and shear wind (error at t = 10 s)
     0.06250        2.388e0       2.208e-8
   observed order: Euler 1.00, RK4 4.01
 ```
+
+</details>
+
+<details>
+<summary><b>Repository layout</b></summary>
+
+```
+crates/core       terrain, atmosphere, wind, line of sight, exposure, search, statistics
+crates/airdrop    parachute physics, integrators, release-point solver, Monte Carlo
+crates/ground     road network, truck model, risk-weighted routing
+crates/drone      drone energy model, wind triangle, path planning, radio link
+crates/geodata    open-data loaders, disk cache, flood detection, ONNX runner
+crates/planner    scenario model, option evaluation, scheduler
+crates/cli        the `lifeline` command
+src-tauri         desktop shell: async commands over the engine
+src               React and TypeScript interface (map, plan, timeline, airdrop lab)
+ml                flood segmentation: data, training, evaluation, export
+docs              physics derivation, screenshots
+```
+
+</details>
 
 ## Running it
 
@@ -221,22 +254,6 @@ cargo run --release -p lifeline-cli -- airdrop montecarlo -n 10000
 
 Scenario files are the same JSON that the app's Save button writes.
 
-## Repository
-
-```
-crates/core       terrain, atmosphere, wind, line of sight, exposure, search, statistics
-crates/airdrop    parachute physics, integrators, release-point solver, Monte Carlo
-crates/ground     road network, truck model, risk-weighted routing
-crates/drone      drone energy model, wind triangle, path planning, radio link
-crates/geodata    open-data loaders, disk cache, flood detection, ONNX runner
-crates/planner    scenario model, option evaluation, scheduler
-crates/cli        the `lifeline` command
-src-tauri         desktop shell: async commands over the engine
-src               React and TypeScript interface (map, plan, timeline, airdrop lab)
-ml                flood segmentation: data, training, evaluation, export
-docs              physics derivation, screenshots
-```
-
 ## Limits
 
 Lifeline is a planning aid, not certified mission software. Its outputs are
@@ -258,6 +275,11 @@ estimates, to be checked by people who know the ground.
 - The first load of a large area can take a minute or two while the road
   network downloads.
 
+## Citing
+
+If Lifeline is useful in your work, GitHub's "Cite this repository" button
+gives a reference generated from [CITATION.cff](CITATION.cff).
+
 ## License
 
-MIT. Data keeps the terms of its source (see above).
+MIT. Data keeps the terms of its source (see [Data sources](#data-sources)).
