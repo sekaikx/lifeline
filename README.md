@@ -264,7 +264,7 @@ assumptions.
 
 <br>
 
-`cargo test` runs 69 tests. Among them:
+`cargo test` runs 76 tests. Among them:
 
 - RK4 beats Euler at every equal step size by more than 100×, and the
   observed orders of accuracy are 1 and 4 against an exact drag solution.
