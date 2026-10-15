@@ -184,13 +184,14 @@ pub fn viewshed(terrain: &TerrainGrid, site: &RiskSite, target_agl: f64) -> Rast
     let clamp = |v: f64, n: usize| v.round().clamp(0.0, (n - 1) as f64) as usize;
     let ci = clamp((site.x - terrain.x0) / terrain.dx, terrain.nx);
     let cj = clamp((site.y - terrain.y0) / terrain.dy, terrain.ny);
+    // saturating: a huge range must not overflow (it just covers the map)
     let (i0, i1) = (
-        (ci as i64 - r).max(0) as usize,
-        ((ci as i64 + r) as usize).min(terrain.nx - 1),
+        (ci as i64).saturating_sub(r).max(0) as usize,
+        ((ci as i64).saturating_add(r) as usize).min(terrain.nx - 1),
     );
     let (j0, j1) = (
-        (cj as i64 - r).max(0) as usize,
-        ((cj as i64 + r) as usize).min(terrain.ny - 1),
+        (cj as i64).saturating_sub(r).max(0) as usize,
+        ((cj as i64).saturating_add(r) as usize).min(terrain.ny - 1),
     );
     let step = terrain.dx * 0.5;
     for j in j0..=j1 {

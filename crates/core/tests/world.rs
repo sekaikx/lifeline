@@ -122,6 +122,9 @@ fn viewshed_respects_range_and_terrain_masking() {
         1.0,
         "a target 600 m up clears the ridge"
     );
+    // an absurd range covers the whole map instead of overflowing
+    let all = viewshed(&open, &site(0.0, 0.0, 1e300), 2.0);
+    assert!(all.values.iter().all(|x| *x > 0.0));
 }
 
 #[test]

@@ -236,6 +236,14 @@ pub fn parse_iso_utc(s: &str) -> Option<i64> {
     let num = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
     let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
     let (hh, mm, ss) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    if !(1..=12).contains(&m)
+        || !(1..=31).contains(&d)
+        || !(0..24).contains(&hh)
+        || !(0..60).contains(&mm)
+        || !(0..=60).contains(&ss)
+    {
+        return None;
+    }
     // Howard Hinnant's days_from_civil
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);

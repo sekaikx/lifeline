@@ -163,3 +163,50 @@ fn scenario_round_trips_and_validates() {
     });
     assert!(plan(world(), &other).unwrap_err().contains("world"));
 }
+
+#[test]
+fn rejects_scenarios_that_would_mislead_the_plan() {
+    let check = |edit: &dyn Fn(&mut PlanScenario), what: &str| {
+        let mut s = example();
+        edit(&mut s);
+        assert!(plan(world(), &s).is_err(), "{what} accepted");
+    };
+    // duplicate ids mixed up deadlines and probabilities in the summary
+    check(
+        &|s| s.requests[1].id = s.requests[0].id.clone(),
+        "duplicate id",
+    );
+    // negative detectability made routing loop on negative costs
+    check(
+        &|s| s.fleet.trucks.truck.detectability = -1.0,
+        "negative detectability",
+    );
+    check(
+        &|s| s.fleet.trucks.truck.handling_min = -600.0,
+        "negative handling",
+    );
+    check(&|s| s.fleet.aircraft.cost_per_hour = -1.0, "negative cost");
+    // a request 1000 km off a 24 km map was planned on clamped terrain
+    check(&|s| s.requests[0].x = 1.0e6, "request off the map");
+    check(&|s| s.depot.y = -1.0e6, "depot off the map");
+    // negative air density gave NaN drone energy that passed the battery check
+    check(
+        &|s| {
+            s.weather.atmosphere = lifeline_core::atmosphere::Atmosphere::Isa {
+                temperature_offset: -300.0,
+            }
+        },
+        "negative density",
+    );
+}
+
+#[test]
+fn absurd_trip_counts_are_infeasible_not_scheduled() {
+    // 0.1 g per truck used to schedule 15 million trips for one request
+    let mut s = example();
+    s.fleet.trucks.truck.capacity_kg = 1e-4;
+    let p = plan(world(), &s).unwrap();
+    let truck = &assignment(&p, "R7").options[0];
+    assert!(!truck.feasible && truck.reason.as_deref().unwrap().contains("trips"));
+    assert!(p.schedule.iter().map(|u| u.trips.len()).sum::<usize>() < 100);
+}

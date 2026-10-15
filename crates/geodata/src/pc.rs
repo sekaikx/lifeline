@@ -133,11 +133,9 @@ pub(crate) fn crop_array(
     size: usize,
     query: &str,
 ) -> Result<Array, String> {
-    let bytes = fetcher.get(
-        &crop_url(area, collection, item, size, size, "npy", query),
-        Some(Duration::from_secs(30 * 86_400)),
-    )?;
-    parse_npy(&bytes)
+    let url = crop_url(area, collection, item, size, size, "npy", query);
+    let bytes = fetcher.get(&url, Some(Duration::from_secs(30 * 86_400)))?;
+    parse_npy(&bytes).inspect_err(|_| fetcher.forget_get(&url))
 }
 
 /// Minimal `.npy` reader for little-endian integer and float arrays.
@@ -147,9 +145,13 @@ pub(crate) fn parse_npy(b: &[u8]) -> Result<Array, String> {
     }
     let (header_len, start) = match b[6] {
         1 => (u16::from_le_bytes([b[8], b[9]]) as usize, 10),
-        _ => (u32::from_le_bytes([b[8], b[9], b[10], b[11]]) as usize, 12),
+        _ if b.len() >= 12 => (u32::from_le_bytes([b[8], b[9], b[10], b[11]]) as usize, 12),
+        _ => return Err("npy: truncated header".into()),
     };
-    let header = std::str::from_utf8(&b[start..start + header_len]).map_err(|e| e.to_string())?;
+    let header = b
+        .get(start..start + header_len)
+        .ok_or("npy: truncated header")?;
+    let header = std::str::from_utf8(header).map_err(|e| e.to_string())?;
     let field = |key: &str| -> Option<&str> {
         let i = header.find(key)? + key.len();
         Some(header[i..].trim_start_matches([' ', ':']))
@@ -205,4 +207,34 @@ pub(crate) fn parse_npy(b: &[u8]) -> Result<Array, String> {
         return Err("npy: truncated or unexpected shape".into());
     }
     Ok(Array { shape, data })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn npy(header: &str, data: &[u8]) -> Vec<u8> {
+        let mut b = b"\x93NUMPY\x01\x00".to_vec();
+        b.extend((header.len() as u16).to_le_bytes());
+        b.extend(header.as_bytes());
+        b.extend(data);
+        b
+    }
+
+    #[test]
+    fn reads_npy_and_rejects_truncated_input() {
+        let ok = npy(
+            "{'descr': '|u1', 'fortran_order': False, 'shape': (1, 2, 2), }",
+            &[1, 2, 3, 4],
+        );
+        let a = parse_npy(&ok).unwrap();
+        assert_eq!(a.shape, vec![1, 2, 2]);
+        assert_eq!(a.at(0, 1, 0), 3.0);
+        // a cut-off download must be an error, not a panic
+        for len in 10..ok.len() {
+            assert!(parse_npy(&ok[..len]).is_err(), "{len} bytes");
+        }
+        assert!(parse_npy(b"\x93NUMPY\x02\x00\xff\xff").is_err());
+        assert!(parse_npy(b"\x93NUMPY\x01\x00\xff\xff").is_err());
+    }
 }

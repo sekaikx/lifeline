@@ -34,6 +34,10 @@ pub struct Place {
 #[derive(Deserialize)]
 struct Response {
     elements: Vec<Element>,
+    /// Set when the query failed part way (timeout, out of memory): the
+    /// response is still HTTP 200 but `elements` is incomplete.
+    #[serde(default)]
+    remark: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -97,6 +101,9 @@ pub fn network_from_overpass(
     let inside = |p: &[f64; 2]| p[0].abs() <= clip && p[1].abs() <= clip;
     let r: Response =
         serde_json::from_slice(json).map_err(|e| format!("invalid Overpass response: {e}"))?;
+    if let Some(remark) = r.remark.as_deref().filter(|m| m.contains("error")) {
+        return Err(format!("Overpass query failed: {remark}"));
+    }
     let mut coords: HashMap<i64, [f64; 2]> = HashMap::new();
     let mut ways = Vec::new();
     let mut places = Vec::new();
@@ -221,7 +228,14 @@ pub fn osm(fetcher: &Fetcher, area: &Area) -> Result<(RoadNetwork, Vec<Place>), 
                 Some(Duration::from_secs(7 * 86_400)),
             ) {
                 Ok(bytes) => {
-                    return network_from_overpass(&bytes, &area.frame(), area.size_m / 2.0)
+                    match network_from_overpass(&bytes, &area.frame(), area.size_m / 2.0) {
+                        Ok(v) => return Ok(v),
+                        Err(e) => {
+                            // do not keep serving a failed answer from the cache
+                            fetcher.forget_post(server, &body);
+                            errors.push(format!("{server}: {e}"));
+                        }
+                    }
                 }
                 Err(e) => errors.push(e),
             }

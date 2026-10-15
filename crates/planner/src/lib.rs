@@ -186,6 +186,9 @@ fn pick_mode<T>(
     }
 }
 
+/// Trips one request may need before a mode counts as infeasible.
+const MAX_TRIPS: usize = 1_000;
+
 fn trips_for(demand: f64, capacity: f64) -> usize {
     (demand / capacity).ceil().max(1.0) as usize
 }
@@ -520,11 +523,19 @@ pub fn plan(world: &World, s: &PlanScenario) -> Result<Plan, String> {
                     if !r.mode.allows(m) {
                         return ModeOption::infeasible(m, "excluded for this request");
                     }
-                    match m {
+                    let o = match m {
                         Mode::Truck => ev.truck(&ctx, r),
                         Mode::Drone => ev.drone(r),
                         Mode::Airdrop => ev.airdrop(r),
+                    };
+                    // a tiny capacity would otherwise schedule millions of trips
+                    if o.trips > MAX_TRIPS {
+                        return ModeOption::infeasible(
+                            m,
+                            format!("needs {} trips (at most {MAX_TRIPS})", o.trips),
+                        );
                     }
+                    o
                 })
                 .collect()
         })

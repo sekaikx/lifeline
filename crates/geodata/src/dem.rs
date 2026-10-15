@@ -51,10 +51,13 @@ impl Tiles<'_> {
                 ty.clamp(0, n - 1)
             );
             let bytes = self.fetcher.get(&url, None)?;
-            let (w, h, c, px) = decode_png(&bytes)?;
-            if w != 256 || h != 256 || c < 3 {
-                return Err(format!("unexpected terrain tile format {w}x{h}x{c}"));
-            }
+            let decoded = decode_png(&bytes).and_then(|(w, h, c, px)| {
+                if w != 256 || h != 256 || c < 3 {
+                    return Err(format!("unexpected terrain tile format {w}x{h}x{c}"));
+                }
+                Ok((c, px))
+            });
+            let (c, px) = decoded.inspect_err(|_| self.fetcher.forget_get(&url))?;
             let heights = px
                 .chunks(c)
                 .map(|p| {

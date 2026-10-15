@@ -8,3 +8,4 @@ Small recorded responses so the parsers are tested without network access.
 | `met-norway-gorkha.json` | MET Norway Locationforecast 2.0, first four time steps, wind fields only | CC BY 4.0, MET Norway |
 | `open-meteo-sample.json` | Hand-written sample in the Open-Meteo response format (not real data) | — |
 | `mndwi-sigmoid.onnx` | Generated: probability = sigmoid(20 · MNDWI), no learned weights; stands in for the U-Net when testing tiling and band order | — |
+| `half-resolution.onnx` | Generated: band mean, then a 2×2 max pool; a malformed model whose output is half the input size | — |

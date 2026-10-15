@@ -130,6 +130,13 @@ impl WaterModel {
         let view = out[0]
             .to_plain_array_view::<f32>()
             .map_err(|e| e.to_string())?;
+        // anything else (half resolution, two classes) would be misread
+        if view.len() != SIDE * SIDE {
+            return Err(format!(
+                "water model: output shape {:?}, expected one probability per input pixel",
+                view.shape()
+            ));
+        }
         Ok(view.iter().copied().collect())
     }
 }

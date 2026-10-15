@@ -188,6 +188,13 @@ pub fn detect_new_water(
     if terrain.ny != n {
         return Err("water detection needs a square terrain grid".into());
     }
+    // Mask cells are centred on the terrain's grid points, so the n x n
+    // rasters must cover one cell more than the area (half a cell each side)
+    // for pixel centres to fall on the grid points.
+    let grid = Area {
+        size_m: n as f64 * terrain.dx,
+        ..area.clone()
+    };
     let end = as_of.unwrap_or_else(crate::unix_now);
     let mut items = pc::search(
         fetcher,
@@ -212,8 +219,8 @@ pub fn detect_new_water(
     let mut used = Vec::new();
     for item in items.iter().take(4) {
         let filled = match model {
-            None => index_scene(fetcher, area, item, n, &mut score, &mut scl_water)?,
-            Some(m) => model_scene(fetcher, area, item, n, terrain.dx, m, &mut score)?,
+            None => index_scene(fetcher, &grid, item, n, &mut score, &mut scl_water)?,
+            Some(m) => model_scene(fetcher, &grid, item, n, terrain.dx, m, &mut score)?,
         };
         if filled {
             used.push(Scene {
@@ -240,7 +247,7 @@ pub fn detect_new_water(
     for item in wc.iter().filter(|i| i.datetime == newest) {
         let a = pc::crop_array(
             fetcher,
-            area,
+            &grid,
             "esa-worldcover",
             &item.id,
             fine,

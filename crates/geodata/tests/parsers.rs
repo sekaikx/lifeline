@@ -103,3 +103,25 @@ fn malformed_responses_are_errors() {
     assert!(profile_from_met_norway(b"{}", 0).is_err());
     assert!(profile_from_open_meteo(b"{\"elevation\": 1, \"hourly\": {}}", 0).is_err());
 }
+
+#[test]
+fn overpass_runtime_error_is_not_a_road_network() {
+    // Overpass answers a timed-out query with HTTP 200, partial elements and a remark
+    let partial = br#"{"version":0.6,"elements":[],"remark":"runtime error: Query timed out in \"query\" at line 1 after 121 seconds."}"#;
+    let frame = LocalFrame::new(27.997, 84.628);
+    let err = network_from_overpass(partial, &frame, 1_000.0).unwrap_err();
+    assert!(err.contains("timed out"), "{err}");
+}
+
+#[test]
+fn iso_parser_rejects_impossible_dates() {
+    // `lifeline flood --date 2022-13-45` used to review some day in 2023
+    for bad in [
+        "2022-13-45T12:00:00Z",
+        "2022-00-10T12:00:00Z",
+        "2022-09-05T25:00:00Z",
+    ] {
+        assert_eq!(parse_iso_utc(bad), None, "{bad}");
+    }
+    assert!(parse_iso_utc("2022-12-31T23:59:59Z").is_some());
+}

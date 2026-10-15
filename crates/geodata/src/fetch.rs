@@ -33,7 +33,8 @@ impl Fetcher {
     pub fn new(cache: Option<PathBuf>) -> Result<Self, String> {
         let client = reqwest::blocking::Client::builder()
             .user_agent(USER_AGENT)
-            .timeout(Duration::from_secs(120))
+            // longer than the 120 s Overpass server timeout, so slow answers arrive
+            .timeout(Duration::from_secs(180))
             .build()
             .map_err(|e| e.to_string())?;
         if let Some(dir) = &cache {
@@ -70,9 +71,15 @@ impl Fetcher {
 
     fn store(&self, key: u64, bytes: &[u8]) {
         if let Some(dir) = &self.cache {
-            let tmp = dir.join(format!("{key:016x}.part"));
-            if std::fs::write(&tmp, bytes).is_ok() {
-                let _ = std::fs::rename(tmp, dir.join(format!("{key:016x}")));
+            // unique per writer: the CLI and the app share the cache, and two
+            // writers on one temp file can publish a mix of both
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let tmp = dir.join(format!("{key:016x}.{}-{n}.part", std::process::id()));
+            if std::fs::write(&tmp, bytes).is_err()
+                || std::fs::rename(&tmp, dir.join(format!("{key:016x}"))).is_err()
+            {
+                let _ = std::fs::remove_file(tmp);
             }
         }
     }
@@ -124,6 +131,25 @@ impl Fetcher {
     }
 }
 
+impl Fetcher {
+    fn forget(&self, key: u64) {
+        if let Some(dir) = &self.cache {
+            let _ = std::fs::remove_file(dir.join(format!("{key:016x}")));
+        }
+    }
+
+    /// Drop the cached answer to a GET, e.g. one that turned out unusable
+    /// (an HTML error page served with status 200 by a proxy).
+    pub(crate) fn forget_get(&self, url: &str) {
+        self.forget(fnv(&[b"GET", url.as_bytes()]));
+    }
+
+    /// Drop the cached answer to a POST.
+    pub(crate) fn forget_post(&self, url: &str, body: &str) {
+        self.forget(fnv(&[b"POST", url.as_bytes(), body.as_bytes()]));
+    }
+}
+
 fn host(url: &str) -> &str {
     url.split('/').nth(2).unwrap_or(url)
 }
@@ -136,4 +162,27 @@ fn check(resp: reqwest::blocking::Response, url: &str) -> Result<Vec<u8>, String
         return Err(format!("{} returned {status}: {text}", host(url)));
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stores_without_leftovers_and_forgets() {
+        let dir = std::env::temp_dir().join(format!("lifeline-fetch-test-{}", std::process::id()));
+        let mut f = Fetcher::new(Some(dir.clone())).unwrap();
+        f.offline = true;
+        let url = "https://example.invalid/tile.png";
+        f.store(fnv(&[b"GET", url.as_bytes()]), b"<html>proxy login</html>");
+        assert_eq!(f.get(url, None).unwrap(), b"<html>proxy login</html>");
+        let names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(names.iter().all(|n| !n.ends_with(".part")), "{names:?}");
+        f.forget_get(url);
+        assert!(f.get(url, None).is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

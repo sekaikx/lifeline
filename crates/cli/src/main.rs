@@ -37,10 +37,10 @@ struct Cli {
 #[derive(clap::Args, Clone)]
 struct AreaArgs {
     /// Latitude of the area centre (omit for generated terrain)
-    #[arg(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true, requires = "lon")]
     lat: Option<f64>,
     /// Longitude of the area centre
-    #[arg(long, allow_hyphen_values = true)]
+    #[arg(long, allow_hyphen_values = true, requires = "lat")]
     lon: Option<f64>,
     /// Side of the square area [km]
     #[arg(long, default_value_t = 30.0)]
@@ -227,9 +227,10 @@ fn print_plan(world: &World, s: &PlanScenario) -> Result<(), String> {
     let m = &p.summary;
     println!(
         "\nexpected delivered {:.0} of {:.0} kg ({:.0} kg on time), critical on time {}/{}, last arrival {}, cost {:.0}",
-        m.expected_kg,
-        m.demand_kg,
-        m.expected_on_time_kg,
+        // + 0.0 turns the -0.0 of an empty sum into 0
+        m.expected_kg + 0.0,
+        m.demand_kg + 0.0,
+        m.expected_on_time_kg + 0.0,
         m.critical_on_time,
         m.critical_total,
         hours(m.makespan_h),
@@ -395,7 +396,9 @@ fn run(cli: Cli) -> Result<(), String> {
                 as_of,
                 model.as_ref(),
             )?;
-            let km2 = |f: f64| f * area.size_m * area.size_m / 1e6;
+            // fractions are over the terrain grid points, one cell each
+            let side = world.terrain.nx as f64 * world.terrain.dx;
+            let km2 = |f: f64| f * side * side / 1e6;
             println!("method        {}", w.method);
             println!(
                 "scenes        {}",

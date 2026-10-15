@@ -36,3 +36,11 @@ fn rejects_mismatched_input() {
     assert!(model.predict(&[0.0; 10], 4, 4).is_err());
     assert!(WaterModel::load(Path::new("tests/fixtures/README.md")).is_err());
 }
+
+#[test]
+fn rejects_a_model_whose_output_is_not_one_value_per_pixel() {
+    // ReduceMean over bands, then a 2x2 max pool: half-resolution output
+    let model = WaterModel::load(Path::new("tests/fixtures/half-resolution.onnx")).unwrap();
+    let refl = vec![0.1f32; MODEL_BANDS.len() * 40 * 40];
+    assert!(model.predict(&refl, 40, 40).is_err());
+}

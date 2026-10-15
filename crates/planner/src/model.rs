@@ -304,6 +304,16 @@ impl PlanScenario {
         self.fleet.drones.drone.validate()?;
         self.fleet.aircraft.bundle.validate()?;
         self.weather.wind.validate()?;
+        // a temperature offset below about -216 K or a negative constant
+        // density gives negative air density, and NaN drone energy passes
+        // the battery check
+        let atmosphere = &self.weather.atmosphere;
+        if [-500.0, 0.0, 11_000.0]
+            .iter()
+            .any(|z| !(atmosphere.density(*z) >= 0.0 && atmosphere.density(*z).is_finite()))
+        {
+            return Err("weather: air density must be non-negative".into());
+        }
         let t = &self.fleet.trucks.truck;
         if [
             t.capacity_kg,
@@ -332,12 +342,43 @@ impl PlanScenario {
         if !(1..=20_000).contains(&a.samples) {
             return Err("aircraft: 1-20000 Monte Carlo samples".into());
         }
+        // negative times, costs or detectability give negative trip times and
+        // negative risk, which breaks the shortest-path searches
+        let d = &self.fleet.drones.drone;
+        if [
+            t.handling_min,
+            t.detectability,
+            self.fleet.trucks.cost_per_hour,
+            d.detectability,
+            d.turnaround_min,
+            self.fleet.drones.cost_per_hour,
+            a.rigging_min,
+            a.turnaround_min,
+            a.detectability,
+            a.cost_per_hour,
+        ]
+        .iter()
+        .any(|v| !(*v >= 0.0))
+        {
+            return Err("fleet: handling, turnaround and rigging times, detectability and costs must be non-negative".into());
+        }
         if !(0.0..=1.0).contains(&self.settings.min_delivery_prob) {
             return Err("risk tolerance must be between 0 and 1".into());
         }
-        for r in &self.requests {
+        let half = self.world.size_m() / 2.0;
+        let on_map = |x: f64, y: f64| x.abs() <= half && y.abs() <= half;
+        if !on_map(self.depot.x, self.depot.y) {
+            return Err("the depot is outside the map".into());
+        }
+        for (k, r) in self.requests.iter().enumerate() {
             if !(r.demand_kg > 0.0) || !(r.due_h > 0.0) {
                 return Err(format!("{}: demand and deadline must be positive", r.name));
+            }
+            if !on_map(r.x, r.y) {
+                return Err(format!("{}: outside the map", r.name));
+            }
+            if self.requests[..k].iter().any(|o| o.id == r.id) {
+                return Err(format!("request id {} is used twice", r.id));
             }
         }
         Ok(())
