@@ -1,58 +1,179 @@
-# Trajectory and Airdrop Simulator
+# Lifeline
 
-A desktop app for planning a parachute supply drop. It simulates the package
-through a standard atmosphere and layered winds. It computes where the aircraft
-must release the package to hit the drop zone, and shows the landing spread
-under uncertainty, all in an interactive 3-D view.
+Lifeline is a desktop planner for getting supplies to places that are hard or
+dangerous to reach. For each delivery it compares a truck, a drone and a
+parachute drop on real terrain, roads, weather and satellite imagery, then
+builds a schedule: which vehicle goes where, when the supplies arrive, how
+likely they are to arrive intact, and what it costs.
 
-Built with a **Rust physics engine** and a **Tauri + React** interface. The
-numerical methods are written by hand and checked against exact solutions by
-the test suite.
+It is meant for the planning cell of a relief operation, or a logistics unit
+working where roads are cut, the weather matters and some areas are unsafe.
+It runs on one laptop and keeps working offline once an area has been loaded.
 
-![3-D drop with Monte Carlo impacts](docs/img/3d-drop.png)
+![Plan for seven deliveries around Gorkha, Nepal](docs/img/plan.png)
 
 ## What it does
 
-| Tab | What you get |
+Pick a preset or any latitude and longitude, and Lifeline downloads the
+elevation, the OpenStreetMap road network and settlements, and a wind
+forecast. It then proposes an example set of deliveries to real villages, so
+there is something to plan straight away.
+
+You mark where it is unsafe. An observed area (a checkpoint, a hostile
+position, a crowd) puts at risk anything it can see, and Lifeline works out
+what it can see from the terrain, separately for trucks on the ground, drones
+at cruise height and aircraft at drop height. A hazard zone either closes the
+roads through it or adds to the risk of using them. The satellite flood check
+marks newly flooded land in recent Sentinel-2 images and closes the roads
+that cross it.
+
+Every delivery gets three options. A truck takes the road route, with
+alternatives that trade time against exposure and off-road legs where no
+road reaches. A drone flies an energy-limited path that accounts for the
+wind, and the plan shows whether its radio link to the depot holds. An
+aircraft drops by parachute: Lifeline finds the release point it must fly to,
+the landing spread from a Monte Carlo of wind and timing errors, and the
+chance of landing in the drop zone. Each option carries its time, number of
+trips, probability of arrival and cost.
+
+The scheduler takes deliveries by priority, then deadline. Each gets the
+cheapest option that meets the risk tolerance and arrives on time; if none
+is on time, the earliest; if none meets the tolerance, the safest. The rule
+is deliberately simple so that a planner can follow and defend every
+decision. It is not a global optimum.
+
+A separate airdrop lab shows one drop in 3-D with the physics behind it:
+release point, drift, dispersion ellipses, the atmosphere and wind profile,
+and a check of the numerical method.
+
+| Satellite layer | Flood check, Dadu, September 2022 |
 | --- | --- |
-| **3D drop** | Animated aircraft, release, canopy inflation and descent over terrain, with wind arrows and Monte Carlo impacts. Orbit, follow-cam, scrub the timeline. |
-| **Release plan** | Top-down computed air release point (CARP): solved release point, aircraft track, drift, green-light lead time, plus the "timing only" solution that shows the crosswind miss you get without offsetting the track. |
-| **Dispersion** | Monte Carlo over wind, timing, navigation and drag errors. 50 % / 95 % ellipses, CEP, probability of landing in the drop zone, CSV export. |
-| **Numerics** | Euler vs RK4 vs exact solution, convergence (error vs step size, log-log) and work-vs-precision plots. |
-| **Atmosphere** | ISA density, temperature, pressure and the wind profile. |
+| ![Sentinel-2 imagery over Gorkha](docs/img/satellite.png) | ![New water detected around Dadu](docs/img/flood.png) |
 
-Every number in the UI updates live as you edit the scenario (a drop solves in
-about 6 ms; 2,000 Monte Carlo drops take about 0.25 s).
-
-| Release plan | Landing dispersion |
+| Option comparison for one delivery | Airdrop lab |
 | --- | --- |
-| ![Release plan](docs/img/release-plan.png) | ![Dispersion](docs/img/dispersion.png) |
+| ![Truck, drone and airdrop compared](docs/img/plan-request.png) | ![Airdrop physics lab](docs/img/airdrop-lab.png) |
 
-| Numerics | Atmosphere |
+## A worked example
+
+The default Gorkha scenario has a depot with an airstrip, seven requests
+ranging from a field clinic to a mountain village far from any road, three
+observed areas overlooking the paved roads, a washed-out crossing and a
+reported minefield on unpaved roads, and the current MET Norway wind
+forecast. The plan takes well under a second:
+
+```
+$ lifeline example --lat 28.0 --lon 84.63 --size-km 30 --name Gorkha > gorkha.json
+$ lifeline plan -s gorkha.json
+
+id   request                                kg priority  mode      trips  arrives    due P(arrive)
+R1   Field clinic, Pandrung                350 critical  Truck         1     2:07   3:00     99.3%
+R2   Water point, Kyamuntar               6000 high      Truck         2     2:31  10:00     91.9%
+R3   Shelter site, Parajuli Gaun          2500 routine   Truck         1     7:10  24:00     99.3%
+R4   Blood and vaccines, Birenchok          12 critical  Drone         1     0:09   1:30     99.8%
+R5   School kitchen, Srinathkot            900 routine   Truck         1     6:11  18:00     99.3%
+R6   Relay post                             25 high      Drone         2     0:04   4:00    100.0%
+R7   Mountain village                     1500 critical  Aircraft      1     0:44   1:30     99.2%
+
+expected delivered 10764 of 11287 kg (10764 kg on time), critical on time 3/3, last arrival 7:10, cost 9520
+```
+
+Trucks carry the bulk, a drone takes the vaccines needed within 90 minutes,
+and the village with no road gets a parachute drop. The forecast changes
+from day to day, so a rerun gives slightly different times.
+
+## Recognising floods from satellite images
+
+The flood check combines the Sentinel-2 images from the 30 days up to a
+chosen date, newest first, decides which pixels are water, and subtracts
+water that is always there (ESA WorldCover). What remains is new water, and
+it becomes an impassable hazard for trucks. Pixels under cloud, cloud shadow
+or snow are reported as not assessed rather than guessed.
+
+Two detectors decide what is water.
+
+The water index is built in. It is MNDWI, the normalised difference of the
+green and short-wave infrared bands, above 0.05 on surface reflectance, or
+water in Sentinel-2's own scene classification. It needs no training and
+its behaviour is well understood.
+
+The trained U-Net is optional. It is a small convolutional network (0.48 M
+parameters) trained on the hand-labelled scenes of
+[Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11) and run on the
+device through ONNX at about 20 m resolution. Training code, evaluation and
+results are in [`ml/`](ml/README.md).
+
+Scored on held-out hand-labelled scenes (pixels pooled per split):
+
+| Water IoU | Test, 90 scenes | Bolivia, unseen region |
+| --- | ---: | ---: |
+| Water index, MNDWI > 0.05 (as shipped) | 0.728 | 0.611 |
+| Water index, threshold tuned on training data | 0.787 | 0.703 |
+| U-Net | **0.858** | **0.811** |
+
+Precision rises from 0.76 to 0.93 on the test split at the same recall
+(0.95 and 0.91): the network keeps most of the index's sensitivity and
+raises far fewer false alarms. At the 20 m resolution the
+app runs it at, the U-Net scores 0.846 and 0.793.
+
+On the 2022 Indus flood, both detectors find the event and stay quiet a year
+earlier:
+
+| Dadu, Pakistan, 40 × 40 km | Water index | U-Net |
+| --- | ---: | ---: |
+| 5 September 2022, new water | 46.6 % | 42.0 % |
+| 5 September 2021, new water | 2.3 % | 0.0 % |
+
+The trained weights are not distributed with Lifeline. The Sen1Floods11 data
+carries no explicit licence, so the model you use is one you train yourself
+(about an hour on a laptop CPU, see [`ml/README.md`](ml/README.md)). Without
+a model the app uses the water index and does not show the detector choice.
+
+## Data sources
+
+| Data | Source | Terms |
+| --- | --- | --- |
+| Elevation | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (SRTM, GMTED, ETOPO1 and others) | open, [attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) |
+| Roads, settlements | [OpenStreetMap](https://www.openstreetmap.org/copyright) via the Overpass API | ODbL 1.0 |
+| Wind forecast | [MET Norway Locationforecast](https://api.met.no/) (default; surface wind, extended aloft with a power law) | CC BY 4.0 |
+| Wind profile, alternative | [Open-Meteo](https://open-meteo.com/) | free API non-commercial; commercial use needs a key (`OPEN_METEO_API_KEY`) |
+| Imagery, water | Copernicus Sentinel-2 L2A via [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Copernicus open licence |
+| Permanent water | [ESA WorldCover 2021](https://esa-worldcover.org/) | CC BY 4.0 |
+| Flood training labels | [Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11), hand-labelled split | no explicit licence; used for training only |
+
+Responses are cached on disk (`~/.cache/lifeline` on Linux), so an area loads
+from the network once and then works offline. Attribution is shown on the
+map.
+
+## How the numbers are made
+
+| | Model |
 | --- | --- |
-| ![Numerics](docs/img/numerics.png) | ![Atmosphere](docs/img/atmosphere.png) |
+| Exposure | Each observed area has a detection rate λ over the cells it can see (line of sight over the terrain, within range). The chance of passing a route unharmed is exp(−∫λ dt) along it. |
+| Trucks | Shortest paths over the OpenStreetMap graph, weighted by time plus exposure. Sweeping the weight on exposure gives a Pareto set of routes. Speed depends on road class and grade. |
+| Drones | Hover and cruise power from momentum theory, an energy budget with reserve, ground speed from the wind triangle, A* over the exposure field, and radio line of sight to the depot along the path. |
+| Airdrops | Point mass with quadratic drag through the International Standard Atmosphere and the forecast wind profile, parachute inflation, RK4 integration, release point by root finding, landing spread by a parallel Monte Carlo. The derivation is in [docs/physics.md](docs/physics.md). |
 
-## The finish line, proven by tests
+The planning engine is written in Rust with no UI dependencies. The
+documentation of each crate (`cargo doc --open`) describes its model and
+assumptions.
 
-`cargo test` runs 33 tests. The ones the project plan asked for:
+## Tests
 
-- **RK4 beats Euler at every equal step size**, by more than 100×
-  (`rk4_beats_euler_at_every_equal_step_size`).
-- **Observed orders are 1 and 4** against the exact tanh drag solution
-  (`observed_orders_are_one_and_four`), and on the full model with ISA, drag and
-  shear wind (`full_model_converges_at_design_order`).
-- **RK4 still wins at equal work**, with Euler given 4× the steps
-  (`rk4_beats_euler_at_equal_work`).
-- RK4 hits the vacuum parabola to round-off (impact error 1e-12 m).
-- ISA matches the published tables to 0.1 %.
-- The release solver lands within 1 cm of the target, including on a hill with
-  position-dependent wind, where Newton needs several iterations.
-- The 95 % ellipse holds 95 ± 3 % of the Monte Carlo samples; same seed gives
-  same result.
-- An unstable step size (Euler at 1 s through canopy opening) is reported as an
-  error, never as a confident wrong release point.
+`cargo test` runs 69 tests. Among them:
 
-Measured convergence (`airdrop numerics`):
+- RK4 beats Euler at every equal step size by more than 100×, and the
+  observed orders of accuracy are 1 and 4 against an exact drag solution.
+- The release solver lands within 1 cm of the target, also over a hill with
+  position-dependent wind. An unstable step size is reported as an error,
+  never as a confident wrong answer.
+- The 95 % landing ellipse holds 95 ± 3 % of Monte Carlo samples.
+- Line of sight, viewsheds and hazard masks; routing on generated and
+  recorded OpenStreetMap networks; the scheduler's mode choices.
+- Parsers for recorded Overpass and MET Norway responses, so the data path
+  is tested without a network.
+- The ONNX runner gives the same answer across tile seams as on a single
+  tile.
 
 ```
 Projectile with drag, ISA and shear wind (error at t = 10 s)
@@ -65,90 +186,78 @@ Projectile with drag, ISA and shear wind (error at t = 10 s)
   observed order: Euler 1.00, RK4 4.01
 ```
 
-## Physics
+## Running it
 
-Point mass with gravity and quadratic drag on the air-relative velocity,
-International Standard Atmosphere (to 86 km, hot/cold days), uniform /
-power-law / layered winds, static-line parachute with a power-law inflation
-model, and flat / hill / gridded (DEM-ready) terrain. The full derivation is in
-[docs/physics.md](docs/physics.md).
-
-## Run it
-
-Prerequisites: [Rust](https://rustup.rs), Node 20+, and the
-[Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your
-OS (WebView2 on Windows is already installed on Windows 10/11).
+You need [Rust](https://rustup.rs) 1.91 or newer, Node 20.19 or newer, and
+the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/)
+for your OS.
 
 ```bash
 npm install
 npm run tauri dev        # desktop app with hot reload
-npm run tauri build      # installer for your OS (.msi/.exe, .dmg, .deb/.AppImage)
+npm run tauri build      # installer for your OS
 ```
 
 Pushing a tag such as `v0.1.0` builds Windows, macOS and Linux installers in
 GitHub Actions and attaches them to a draft release.
 
+To use a trained flood model, put `water-unet.onnx` in
+`~/.local/share/lifeline/models/` (Linux; the platform data directory
+elsewhere) or point `LIFELINE_WATER_MODEL` at the file.
+
 ### Command line
 
-The same engine has a CLI, handy for scripting and batch runs:
+The same engine is available as the `lifeline` command, for scripting and
+batch runs. Install it with `cargo install --path crates/cli`, or run it
+through cargo:
 
 ```bash
-cargo run --release -p airdrop-cli -- scenario > drop.json   # editable template
-cargo run --release -p airdrop-cli -- drop -s drop.json
-cargo run --release -p airdrop-cli -- montecarlo -s drop.json -n 10000
-cargo run --release -p airdrop-cli -- numerics
-cargo run --release -p airdrop-cli -- profile --csv
+cargo run --release -p lifeline-cli -- example --lat 28.0 --lon 84.63 --name Gorkha > gorkha.json
+cargo run --release -p lifeline-cli -- plan -s gorkha.json [--json]
+cargo run --release -p lifeline-cli -- wind --lat 28.0 --lon 84.63
+cargo run --release -p lifeline-cli -- flood -s dadu.json --date 2022-09-05 [--model water-unet.onnx]
+cargo run --release -p lifeline-cli -- airdrop montecarlo -n 10000
 ```
 
-Add `--json` to any report for machine-readable output. Scenario files are the
-same JSON the app's **Save…** button writes.
+Scenario files are the same JSON that the app's Save button writes.
 
-## Layout
+## Repository
 
 ```
-crates/airdrop-core/   physics library (no UI dependencies), all tests
-  src/atmosphere.rs    ISA
-  src/wind.rs          wind models and direction conventions
-  src/dynamics.rs      equations of motion, parachute
-  src/integrate.rs     Euler, RK4, Hermite impact location, divergence guard
-  src/analytic.rs      exact solutions
-  src/convergence.rs   error-vs-step studies, observed order
-  src/roots.rs         Brent's method, damped 2-D Newton
-  src/release.rs       release point (CARP) solver
-  src/montecarlo.rs    parallel dispersion, ellipses, CEP
-  src/scenario.rs      serializable scenario and the reports the app shows
-crates/airdrop-cli/    `airdrop` command-line tool
-src-tauri/             desktop shell: async commands over the core
-src/                   React + TypeScript UI (three.js scene, uPlot charts, SVG map)
-scripts/screenshots.mjs  UI smoke test that also regenerates docs/img
+crates/core       terrain, atmosphere, wind, line of sight, exposure, search, statistics
+crates/airdrop    parachute physics, integrators, release-point solver, Monte Carlo
+crates/ground     road network, truck model, risk-weighted routing
+crates/drone      drone energy model, wind triangle, path planning, radio link
+crates/geodata    open-data loaders, disk cache, flood detection, ONNX runner
+crates/planner    scenario model, option evaluation, scheduler
+crates/cli        the `lifeline` command
+src-tauri         desktop shell: async commands over the engine
+src               React and TypeScript interface (map, plan, timeline, airdrop lab)
+ml                flood segmentation: data, training, evaluation, export
+docs              physics derivation, screenshots
 ```
-
-## Why Rust + Tauri
-
-- **Rust core.** Hand-written integrators run at native speed, so Monte Carlo
-  stays interactive without vectorisation tricks. The type system keeps units
-  and models explicit, and the core has no UI dependencies, so the same crate
-  can later feed a drone simulator, a tracker or a server.
-- **Tauri.** A native desktop app of a few MB (Electron ships a whole
-  browser), with a web UI so three.js and modern charting are available.
-- **No numerical black boxes.** Euler, RK4, Brent and Newton are implemented
-  here rather than imported, because comparing them is the point.
 
 ## Limits
 
-This is an educational and planning-study tool, not certified mission
-software. It uses a point-mass model (no canopy oscillation, glide, or
-package tumbling), the wind is a forecast profile plus a random offset, and
-the parachute inflation model is a simple power law. Real airdrop systems use
-measured ballistic data for specific canopies.
+Lifeline is a planning aid, not certified mission software. Its outputs are
+estimates, to be checked by people who know the ground.
 
-## Stretch goals
-
-- Terrain from real elevation data (the `Terrain::Grid` type is the hook)
-- Canopy opening shock loads and oscillation (6-DOF)
-- Wind uncertainty correlated across altitude layers
-- Steerable (guided) parachutes
+- Optical imagery cannot see through cloud. Under monsoon cloud a flood can
+  go undetected for days; the app reports the share it could not assess. A
+  radar (Sentinel-1) detector would close that gap and fits the same
+  interface.
+- The satellite layer shows the latest clear images, not the images as of
+  the flood-check date.
+- Exposure rates for observed areas are the planner's judgement, not
+  measurements, and the plan is only as good as those inputs.
+- OpenStreetMap coverage varies. Missing roads make trucks look worse than
+  they are; roads that are mapped but destroyed make them look better.
+- The airdrop model is a point mass (no canopy oscillation or glide) with a
+  power-law inflation model; real systems use measured data for specific
+  canopies.
+- The first load of a large area can take a minute or two while the road
+  network downloads.
 
 ## License
 
-MIT
+MIT. Data keeps the terms of its source (see above).

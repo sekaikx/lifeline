@@ -39,7 +39,8 @@ export function Timeline({
   const end = Math.max(1, ...rows.flatMap((u) => u.trips.map((t) => t.ready_h)), due ?? 0);
   const step = end <= 3 ? 0.5 : end <= 8 ? 1 : end <= 16 ? 2 : 4;
   const span = Math.ceil(end / step) * step;
-  const plot = Math.max(100, width - LABEL - 12);
+  // room on the right for the last tick label and the due-time label
+  const plot = Math.max(100, width - LABEL - 20);
   const x = (h: number) => LABEL + (h / span) * plot;
   const height = AXIS + rows.length * ROW + 4;
   const ticks = Array.from({ length: Math.round(span / step) + 1 }, (_, i) => i * step);
@@ -93,7 +94,12 @@ export function Timeline({
         {due !== undefined && (
           <g>
             <line x1={x(due)} x2={x(due)} y1={AXIS - 4} y2={height} stroke={palette.critical} strokeDasharray="4 3" strokeWidth={1.5} />
-            <text x={x(due) + 4} y={AXIS + 8} className="tl-due">
+            <text
+              x={due > span * 0.85 ? x(due) - 4 : x(due) + 4}
+              y={AXIS + 8}
+              textAnchor={due > span * 0.85 ? "end" : "start"}
+              className="tl-due"
+            >
               {selected} due
             </text>
           </g>

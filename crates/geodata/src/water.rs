@@ -292,11 +292,17 @@ pub fn detect_new_water(
         method: match model {
             None => "Sentinel-2 MNDWI > 0.05 or SCL water on clear pixels, minus ESA WorldCover 2021 permanent water".into(),
             Some(m) => format!(
-                "U-Net water segmentation ({}) on clear Sentinel-2 pixels at {MODEL_RESOLUTION:.0} m, minus ESA WorldCover 2021 permanent water",
-                m.path.file_name().and_then(|f| f.to_str()).unwrap_or("model")
+                "U-Net water segmentation ({}) on clear Sentinel-2 pixels at {:.0} m, minus ESA WorldCover 2021 permanent water",
+                m.path.file_name().and_then(|f| f.to_str()).unwrap_or("model"),
+                terrain.dx / model_factor(terrain.dx) as f64
             ),
         },
     })
+}
+
+/// Model pixels per cell side, so the network runs near [`MODEL_RESOLUTION`].
+fn model_factor(cell_m: f64) -> usize {
+    ((cell_m / MODEL_RESOLUTION).round() as usize).clamp(1, 4)
 }
 
 /// Clear-sky mask for one scene: SCL cloud classes widened by `buffer` pixels.
@@ -368,7 +374,7 @@ fn model_scene(
     model: &WaterModel,
     score: &mut [Option<f64>],
 ) -> Result<bool, String> {
-    let k = ((cell_m / MODEL_RESOLUTION).round() as usize).clamp(1, 4);
+    let k = model_factor(cell_m);
     let size = n * k;
     let assets: String = MODEL_BANDS.iter().map(|b| format!("assets={b}&")).collect();
     let a = pc::crop_array(

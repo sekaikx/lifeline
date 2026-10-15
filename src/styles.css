@@ -335,7 +335,8 @@ h4 {
   color: var(--text2);
 }
 
-.field:has(select) {
+.field:has(select),
+.field:has(> .text-input:not([type="date"])) {
   grid-template-columns: 1fr 1.7fr;
 }
 
@@ -718,6 +719,10 @@ select.select {
 .tl-due {
   font-size: 11px;
   fill: var(--critical);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .plan-panel {
@@ -1108,11 +1113,11 @@ table.data th {
 }
 
 .layers th {
-  text-align: left;
+  text-align: right;
   font-weight: 500;
   color: var(--muted);
   font-size: 11px;
-  padding: 2px 2px 4px;
+  padding: 2px 10px 4px 2px;
 }
 
 .layers td {

@@ -93,15 +93,17 @@ export function MapView(props: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const fit = useCallback(
-    // the container can report zero size before layout; never fit to less than 100 px
-    (): View => ({
-      cx: (bx0 + bx1) / 2,
-      cy: (by0 + by1) / 2,
-      mpp: Math.max((bx1 - bx0) / Math.max(size.w - 32, 100), (by1 - by0) / Math.max(size.h - 32, 100)),
-    }),
-    [bx0, bx1, by0, by1, size.w, size.h],
-  );
+  const fit = useCallback((): View => {
+    // Fit the area above the footer. The container can report zero size
+    // before layout; never fit to less than 100 px.
+    const [left, top, right, bottom] = [16, 16, size.w - 16, size.h - 36];
+    const mpp = Math.max((bx1 - bx0) / Math.max(right - left, 100), (by1 - by0) / Math.max(bottom - top, 100));
+    return {
+      cx: (bx0 + bx1) / 2 - ((left + right) / 2 - size.w / 2) * mpp,
+      cy: (by0 + by1) / 2 + ((top + bottom) / 2 - size.h / 2) * mpp,
+      mpp,
+    };
+  }, [bx0, bx1, by0, by1, size.w, size.h]);
   const touched = useRef(false);
   useEffect(() => {
     if (!touched.current) setView(fit());
@@ -261,7 +263,7 @@ export function MapView(props: Props) {
   // ------------------------------------------------------------ data
   const byRequest = useMemo(() => new Map(plan?.assignments.map((a) => [a.request_id, a]) ?? []), [plan]);
   const selectedAssignment = selected ? byRequest.get(selected) : undefined;
-  const scaleLen = niceStep(size.w * v.mpp, 5);
+  const scaleLen = niceStep(size.w * v.mpp, 8);
   const halo = { paintOrder: "stroke" as const, stroke: palette.surface, strokeWidth: 3, strokeLinejoin: "round" as const };
   const depot = posOf("depot", "depot", scenario.depot.x, scenario.depot.y);
 
