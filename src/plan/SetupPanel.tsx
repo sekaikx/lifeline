@@ -38,6 +38,8 @@ export interface DataActions {
   floodSummary: string | null;
   /** path of the installed learned water model, if any */
   waterModel: string | null;
+  /** Truck access lost after flood / impassable masks; derived from the plan */
+  accessNote: string | null;
 }
 
 export function SetupPanel({
@@ -384,6 +386,7 @@ function FloodControls({ real, actions }: { real: boolean; actions: DataActions 
         Detect new water
       </button>
       {actions.floodSummary && <p className="note">{actions.floodSummary}</p>}
+      {actions.accessNote && <p className="note access-note">{actions.accessNote}</p>}
     </div>
   );
 }

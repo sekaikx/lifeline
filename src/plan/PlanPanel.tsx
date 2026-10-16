@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { NumberField, SelectField } from "../components/Field";
 import { fmt, fmtClock, fmtKg, fmtMoney, fmtPct } from "../lib/format";
 import type { Palette } from "../lib/theme";
+import type { StagingRow } from "./access";
+import { truckBlocked } from "./access";
 import { INK_ON_MODE, modeColor } from "./MapView";
 import type { Item } from "../supply/types";
 import type { Assignment, Mode, ModeChoice, ModeOption, Plan, PlanScenario, Priority, Request, RequestLine } from "./types";
@@ -38,6 +40,8 @@ interface Props {
   available: Record<string, number>;
   /** Shortfalls by request, from the supply allocation */
   shortfalls: Record<string, string[]>;
+  /** Requests with no truck route; staging advice from the plan */
+  staging: StagingRow[];
 }
 
 function Badge({ id, mode, palette, late }: { id: string; mode: Mode | null; palette: Palette; late?: boolean }) {
@@ -56,7 +60,7 @@ function Badge({ id, mode, palette, late }: { id: string; mode: Mode | null; pal
 }
 
 export function PlanPanel(props: Props) {
-  const { scenario, plan, palette, selected } = props;
+  const { scenario, plan, palette, selected, staging } = props;
   const byId = new Map(plan?.assignments.map((a) => [a.request_id, a]) ?? []);
   const request = scenario.requests.find((r) => r.id === selected) ?? null;
   const assignment = request ? byId.get(request.id) : undefined;
@@ -64,6 +68,8 @@ export function PlanPanel(props: Props) {
   return (
     <aside className="plan-panel">
       {plan ? <Summary plan={plan} scenario={scenario} /> : <div className="panel-block muted">Planning…</div>}
+
+      {staging.length > 0 && <StagingList rows={staging} palette={palette} selected={selected} onSelect={props.onSelect} />}
 
       <section className="panel-block">
         <div className="block-head">
@@ -82,6 +88,7 @@ export function PlanPanel(props: Props) {
               {rows.map((r) => {
                 const a = byId.get(r.id);
                 const late = !!a?.mode && !a.on_time;
+                const noTruck = a ? truckBlocked(a) : false;
                 return (
                   <button key={r.id} className="req-row" aria-pressed={r.id === selected} onClick={() => props.onSelect(r.id === selected ? null : r.id)}>
                     <Badge id={r.id} mode={a?.mode ?? null} palette={palette} late={late} />
@@ -91,9 +98,10 @@ export function PlanPanel(props: Props) {
                         <>
                           <span className={late ? "late" : undefined}>{fmtClock(a.completion_h)}</span>
                           <span className="muted"> / {fmtClock(r.due_h)}</span>
+                          {noTruck && <span className="late"> · no truck</span>}
                         </>
                       ) : (
-                        <span className="late">{a ? "unserved" : ""}</span>
+                        <span className="late">{a ? (noTruck ? "no truck" : "unserved") : ""}</span>
                       )}
                     </span>
                   </button>
@@ -118,6 +126,54 @@ export function PlanPanel(props: Props) {
         />
       )}
     </aside>
+  );
+}
+
+function StagingList({
+  rows,
+  palette,
+  selected,
+  onSelect,
+}: {
+  rows: StagingRow[];
+  palette: Palette;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const cut = rows.some((r) => r.cut_by_flood);
+  return (
+    <section className="panel-block staging">
+      <div className="block-head">
+        <h2>{cut ? "Staging (truck cut)" : "Staging (no truck)"}</h2>
+        <span className="note">{rows.length}</span>
+      </div>
+      <p className="note">
+        {cut
+          ? "These requests lost a ground route after the flood check. Stage drone or aircraft where listed."
+          : "No truck route from the depot. Impassable water or hazards may be blocking the roads."}
+      </p>
+      <ul className="staging-list">
+        {rows.map((r) => (
+          <li key={r.request_id}>
+            <button type="button" className="staging-row" aria-pressed={r.request_id === selected} onClick={() => onSelect(r.request_id === selected ? null : r.request_id)}>
+              <Badge id={r.request_id} mode={r.recommend} palette={palette} late={!r.recommend} />
+              <span className="req-name">
+                {r.name}
+                {r.cut_by_flood ? <span className="late"> · cut</span> : null}
+              </span>
+              <span className="req-meta">
+                {r.recommend ? (
+                  <span className="num">{MODE_LABEL[r.recommend]}</span>
+                ) : (
+                  <span className="late">no alternate</span>
+                )}
+              </span>
+            </button>
+            {r.truck_reason && <p className="staging-reason note">{r.truck_reason}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
