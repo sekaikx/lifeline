@@ -24,6 +24,7 @@
 
 use crate::raster::Raster;
 use crate::terrain::TerrainGrid;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -194,19 +195,25 @@ pub fn viewshed(terrain: &TerrainGrid, site: &RiskSite, target_agl: f64) -> Rast
         ((cj as i64).saturating_add(r) as usize).min(terrain.ny - 1),
     );
     let step = terrain.dx * 0.5;
-    for j in j0..=j1 {
-        for i in i0..=i1 {
-            let (x, y) = out.center(i, j);
-            if (x - site.x).hypot(y - site.y) > site.range {
-                continue;
+    let (x0, y0, cell, nx) = (out.x0, out.y0, out.cell, out.nx);
+    // rows are independent, so they are traced in parallel
+    out.values
+        .par_chunks_mut(nx)
+        .enumerate()
+        .skip(j0)
+        .take(j1 + 1 - j0)
+        .for_each(|(j, row)| {
+            for (i, v) in row.iter_mut().enumerate().take(i1 + 1).skip(i0) {
+                let (x, y) = (x0 + i as f64 * cell, y0 + j as f64 * cell);
+                if (x - site.x).hypot(y - site.y) > site.range {
+                    continue;
+                }
+                let target = [x, y, terrain.at(x, y) + target_agl];
+                if line_of_sight(terrain, eye, target, step) {
+                    *v = 1.0;
+                }
             }
-            let target = [x, y, terrain.at(x, y) + target_agl];
-            if line_of_sight(terrain, eye, target, step) {
-                let k = out.index(i, j);
-                out.values[k] = 1.0;
-            }
-        }
-    }
+        });
     out
 }
 

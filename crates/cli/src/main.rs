@@ -18,7 +18,9 @@ mod airdrop;
 use clap::{Parser, Subcommand};
 use lifeline_airdrop::scenario::{self as drop, Scenario as DropScenario};
 use lifeline_geodata::{Area, Fetcher, WaterModel, WindProvider};
-use lifeline_planner::{plan, risk_layers, GeneratedSpec, Mode, PlanScenario, World, WorldSpec};
+use lifeline_planner::{
+    plan, risk_layers, GeneratedSpec, LayerCache, Mode, PlanScenario, World, WorldSpec,
+};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -271,6 +273,14 @@ fn rpc() -> Result<serde_json::Value, String> {
         "plan" => {
             let s = plan_scenario()?;
             json(serde_json::to_value(plan(&build_world(&s.world)?, &s)?))
+        }
+        "plan_all" => {
+            let s = plan_scenario()?;
+            json(serde_json::to_value(LayerCache::default().plan(
+                &build_world(&s.world)?,
+                &s,
+                req.args["haveLayers"].as_str(),
+            )?))
         }
         "risk_layers" => {
             let s = plan_scenario()?;

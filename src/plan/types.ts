@@ -329,3 +329,10 @@ export function isPlanScenario(v: unknown): v is PlanScenario {
     isObj(v.settings)
   );
 }
+
+export interface PlanResult {
+  plan: Plan;
+  layers_key: string;
+  /** Absent when unchanged since the key the UI sent */
+  layers: RiskLayers | null;
+}

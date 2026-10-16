@@ -11,7 +11,7 @@ use lifeline_airdrop::scenario::{
 use lifeline_geodata::{
     Area, Fetcher, Imagery, WaterDetection, WaterModel, WindForecast, WindProvider,
 };
-use lifeline_planner::{Plan, PlanScenario, RiskLayers, World, WorldSpec};
+use lifeline_planner::{LayerCache, Plan, PlanResult, PlanScenario, RiskLayers, World, WorldSpec};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
@@ -19,6 +19,7 @@ use tauri_plugin_dialog::DialogExt;
 struct Data {
     world: Mutex<Option<Arc<World>>>,
     water_model: Mutex<Option<Arc<WaterModel>>>,
+    layers: LayerCache,
     fetcher: Fetcher,
 }
 
@@ -30,6 +31,7 @@ impl Data {
         Self {
             world: Mutex::new(None),
             water_model: Mutex::new(None),
+            layers: LayerCache::default(),
             fetcher,
         }
     }
@@ -118,6 +120,25 @@ async fn world(data: Shared<'_>, spec: WorldSpec) -> Result<World, String> {
 async fn plan(data: Shared<'_>, scenario: PlanScenario) -> Result<Plan, String> {
     blocking(&data, move |d| {
         lifeline_planner::plan(&*d.world(&scenario.world)?, &scenario)
+    })
+    .await
+}
+
+/// The plan and its exposure fields in one call; the fields are computed
+/// once, shared with the planner, and only sent when they changed
+/// (`have_layers` is the fingerprint the UI already holds).
+#[tauri::command]
+async fn plan_all(
+    data: Shared<'_>,
+    scenario: PlanScenario,
+    have_layers: Option<String>,
+) -> Result<PlanResult, String> {
+    blocking(&data, move |d| {
+        d.layers.plan(
+            &*d.world(&scenario.world)?,
+            &scenario,
+            have_layers.as_deref(),
+        )
     })
     .await
 }
@@ -290,6 +311,7 @@ pub fn run() {
             example_plan,
             world,
             plan,
+            plan_all,
             risk_layers,
             wind_forecast,
             imagery,

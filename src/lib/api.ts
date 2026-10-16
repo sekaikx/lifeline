@@ -10,6 +10,7 @@ import type {
   Area,
   Imagery,
   Plan,
+  PlanResult,
   PlanScenario,
   RiskLayers,
   WaterDetection,
@@ -31,6 +32,9 @@ export const api = {
   world: (spec: WorldSpec) => invoke<World>("world", { spec }),
   plan: (scenario: PlanScenario) => invoke<Plan>("plan", { scenario }),
   riskLayers: (scenario: PlanScenario) => invoke<RiskLayers>("risk_layers", { scenario }),
+  /** Plan and exposure fields together; the fields come back only when they differ from `haveLayers`. */
+  planAll: (scenario: PlanScenario, haveLayers: string | null) =>
+    invoke<PlanResult>("plan_all", { scenario, haveLayers }),
 
   // open data for real areas
   windForecast: (area: Area, provider: WindProvider, hours: number) =>

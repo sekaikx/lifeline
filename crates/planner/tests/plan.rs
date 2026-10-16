@@ -210,3 +210,26 @@ fn absurd_trip_counts_are_infeasible_not_scheduled() {
     assert!(!truck.feasible && truck.reason.as_deref().unwrap().contains("trips"));
     assert!(p.schedule.iter().map(|u| u.trips.len()).sum::<usize>() < 100);
 }
+
+#[test]
+fn layer_cache_reuses_fields_and_matches_a_fresh_plan() {
+    let cache = LayerCache::default();
+    let mut s = example();
+    let first = cache.plan(world(), &s, None).unwrap();
+    assert!(first.layers.is_some());
+    // moving a request does not change what the observed areas can see
+    s.requests[0].x += 200.0;
+    let second = cache.plan(world(), &s, Some(&first.layers_key)).unwrap();
+    assert_eq!(second.layers_key, first.layers_key);
+    assert!(second.layers.is_none(), "unchanged fields are not sent again");
+    let fresh = plan(world(), &s).unwrap();
+    assert_eq!(second.plan.assignments, fresh.assignments);
+    // a new observed area does
+    let mut site = s.risk.sites[0].clone();
+    site.id = "S9".into();
+    site.x -= 1500.0;
+    s.risk.sites.push(site);
+    let third = cache.plan(world(), &s, Some(&first.layers_key)).unwrap();
+    assert_ne!(third.layers_key, first.layers_key);
+    assert_eq!(third.layers.as_ref(), Some(&risk_layers(world(), &s)));
+}

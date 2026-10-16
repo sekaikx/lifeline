@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Segmented } from "../components/Field";
 import { api, errorText } from "../lib/api";
 import type { Palette, ThemeMode } from "../lib/theme";
@@ -94,13 +94,18 @@ export function PlanWorkspace({
 
   handle.current = { scenario, setScenario: (s) => { setScenario(s); setSelected(null); }, reset };
 
+  // keep the last scenario across restarts; written when edits pause, since
+  // serialising a large scenario on every drag step is what made edits stutter
   useEffect(() => {
     if (!scenario) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(scenario));
-    } catch {
-      /* storage unavailable */
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scenario));
+      } catch {
+        /* storage unavailable or full */
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
   }, [scenario]);
 
   // the world only changes when its spec does
@@ -140,26 +145,31 @@ export function PlanWorkspace({
   }, [baseLayer, areaKey]);
 
   // replan shortly after edits stop
-  const key = useMemo(() => JSON.stringify(scenario), [scenario]);
+  // Scenario objects are replaced on every edit, so identity is the change
+  // signal; no need to serialise the whole scenario to compare it.
   const generation = useRef(0);
+  const layersKey = useRef<string | null>(null);
   useEffect(() => {
     if (!scenario) return;
     const id = ++generation.current;
     const timer = setTimeout(async () => {
       try {
-        const [p, l] = await Promise.all([api.plan(scenario), api.riskLayers(scenario)]);
+        const r = await api.planAll(scenario, layersKey.current);
         if (id !== generation.current) return;
-        setPlan(p);
-        setLayers(l);
+        setPlan(r.plan);
+        if (r.layers) {
+          setLayers(r.layers);
+          layersKey.current = r.layers_key;
+        }
         setError(null);
-        onStatus(`Planned in ${Math.round(p.compute_ms)} ms`);
+        onStatus(`Planned in ${Math.round(r.plan.compute_ms)} ms`);
       } catch (e) {
         if (id === generation.current) setError(errorText(e));
       }
-    }, 180);
+    }, 120);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [scenario]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

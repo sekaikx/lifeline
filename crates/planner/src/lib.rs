@@ -47,20 +47,67 @@ pub struct RiskLayers {
 pub fn risk_layers(world: &World, s: &PlanScenario) -> RiskLayers {
     let t = &world.terrain;
     let f = &s.fleet;
-    RiskLayers {
-        ground: exposure_field(t, &s.risk, 2.5, f.trucks.truck.detectability),
-        drone: exposure_field(
-            t,
-            &s.risk,
-            f.drones.drone.cruise_agl_m,
-            f.drones.drone.detectability,
-        ),
-        air: exposure_field(
-            t,
-            &s.risk,
-            f.aircraft.drop_height_agl,
-            f.aircraft.detectability,
-        ),
+    let ((ground, drone), air) = rayon::join(
+        || {
+            rayon::join(
+                || exposure_field(t, &s.risk, 2.5, f.trucks.truck.detectability),
+                || {
+                    exposure_field(
+                        t,
+                        &s.risk,
+                        f.drones.drone.cruise_agl_m,
+                        f.drones.drone.detectability,
+                    )
+                },
+            )
+        },
+        || {
+            exposure_field(
+                t,
+                &s.risk,
+                f.aircraft.drop_height_agl,
+                f.aircraft.detectability,
+            )
+        },
+    );
+    RiskLayers { ground, drone, air }
+}
+
+/// Everything the exposure fields depend on. Two scenarios with equal keys
+/// have identical [`RiskLayers`], so moving a request or changing a demand
+/// reuses the fields instead of tracing every viewshed again.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayerKey {
+    world: WorldSpec,
+    risk: lifeline_core::risk::RiskModel,
+    /// (height above ground, detectability) for trucks, drones, aircraft
+    bands: [(f64, f64); 3],
+}
+
+impl LayerKey {
+    pub fn of(s: &PlanScenario) -> Self {
+        let f = &s.fleet;
+        LayerKey {
+            world: s.world.clone(),
+            risk: s.risk.clone(),
+            bands: [
+                (2.5, f.trucks.truck.detectability),
+                (f.drones.drone.cruise_agl_m, f.drones.drone.detectability),
+                (f.aircraft.drop_height_agl, f.aircraft.detectability),
+            ],
+        }
+    }
+
+    /// A short fingerprint of the key, for clients that keep the layers.
+    pub fn fingerprint(&self) -> String {
+        // FNV-1a over the debug form: stable within one build, which is all
+        // a client cache that lives for one session needs
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in format!("{self:?}").bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        format!("{h:016x}")
     }
 }
 
@@ -490,15 +537,27 @@ fn tentative(free: &[f64], opt: &ModeOption, r: &Request) -> Vec<(usize, Trip)> 
 
 pub fn plan(world: &World, s: &PlanScenario) -> Result<Plan, String> {
     s.validate()?;
+    let start = Instant::now();
+    let layers = risk_layers(world, s);
+    plan_with_layers(world, s, &layers, start)
+}
+
+/// [`plan`] with exposure fields already computed for this scenario (see
+/// [`LayerKey`]). `start` is when the caller began, for `compute_ms`.
+pub fn plan_with_layers(
+    world: &World,
+    s: &PlanScenario,
+    layers: &RiskLayers,
+    start: Instant,
+) -> Result<Plan, String> {
+    s.validate()?;
     if world.spec != s.world {
         return Err("the world does not match the scenario's world spec".into());
     }
-    let start = Instant::now();
-    let layers = risk_layers(world, s);
     let ev = Evaluator {
         s,
         world,
-        layers: &layers,
+        layers,
         terrain: Terrain::Grid(world.terrain.clone()),
         env: Environment {
             atmosphere: s.weather.atmosphere.clone(),
@@ -699,4 +758,57 @@ pub fn plan(world: &World, s: &PlanScenario) -> Result<Plan, String> {
         summary,
         compute_ms: start.elapsed().as_secs_f64() * 1e3,
     })
+}
+
+/// A plan together with the exposure fields it was made on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlanResult {
+    pub plan: Plan,
+    /// Fingerprint of the fields (see [`LayerKey::fingerprint`])
+    pub layers_key: String,
+    /// The fields, left out when the caller already holds `layers_key`
+    pub layers: Option<RiskLayers>,
+}
+
+/// Remembers the last exposure fields, so replanning after an edit that
+/// does not touch risk, terrain or vehicle heights skips the viewsheds.
+#[derive(Default)]
+pub struct LayerCache {
+    last: std::sync::Mutex<Option<(LayerKey, std::sync::Arc<RiskLayers>)>>,
+}
+
+impl LayerCache {
+    /// Plan `s`; `have` is the fingerprint of the fields the caller holds.
+    pub fn plan(
+        &self,
+        world: &World,
+        s: &PlanScenario,
+        have: Option<&str>,
+    ) -> Result<PlanResult, String> {
+        s.validate()?;
+        let start = Instant::now();
+        let key = LayerKey::of(s);
+        let cached = self.last.lock().ok().and_then(|slot| {
+            slot.as_ref()
+                .filter(|(k, _)| *k == key)
+                .map(|(_, l)| l.clone())
+        });
+        let layers = match cached {
+            Some(l) => l,
+            None => {
+                let l = std::sync::Arc::new(risk_layers(world, s));
+                if let Ok(mut slot) = self.last.lock() {
+                    *slot = Some((key.clone(), l.clone()));
+                }
+                l
+            }
+        };
+        let plan = plan_with_layers(world, s, &layers, start)?;
+        let layers_key = key.fingerprint();
+        Ok(PlanResult {
+            plan,
+            layers: (have != Some(layers_key.as_str())).then(|| (*layers).clone()),
+            layers_key,
+        })
+    }
 }

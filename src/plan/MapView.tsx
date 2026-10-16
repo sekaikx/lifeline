@@ -78,7 +78,7 @@ export function MapView(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState<View | null>(null);
-  const [cursor, setCursor] = useState<{ x: number; y: number; e: number; n: number } | null>(null);
+  const readout = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: DragKind; id: string; x: number; y: number; moved: boolean } | null>(null);
   const pan = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
 
@@ -110,13 +110,42 @@ export function MapView(props: Props) {
   }, [fit]);
 
   const v = view ?? fit();
+  // Pointer and wheel events arrive faster than the screen refreshes; the
+  // newest view and drag are kept here and committed once per frame.
+  const frame = useRef(0);
+  const liveView = useRef<View>(v);
+  const liveDrag = useRef(drag);
+  if (!frame.current) {
+    liveView.current = v;
+    liveDrag.current = drag;
+  }
+  const commit = () => {
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      setView(liveView.current);
+      setDrag(liveDrag.current);
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
   const sx = (x: number) => size.w / 2 + (x - v.cx) / v.mpp;
   const sy = (y: number) => size.h / 2 - (y - v.cy) / v.mpp;
   const toWorld = (x: number, y: number) => ({ e: v.cx + (x - size.w / 2) * v.mpp, n: v.cy - (y - size.h / 2) * v.mpp });
   const pts = (p: Point[]) => p.map(([x, y]) => `${sx(x).toFixed(1)},${sy(y).toFixed(1)}`).join(" ");
 
   // ------------------------------------------------------------ rasters
-  const relief = useMemo(() => renderRelief(t, reliefStyle(theme)), [t, theme]);
+  // at most ~2000 px a side: finer adds nothing at screen zoom and costs seconds
+  const relief = useMemo(() => renderRelief(t, reliefStyle(theme), Math.max(1, Math.min(4, Math.floor(2048 / Math.max(t.nx - 1, 1))))), [t, theme]);
+  // roads in world coordinates, one path per class, built once per world
+  const roadPaths = useMemo(() => {
+    const by = new Map<string, Path2D>();
+    for (const r of world.network.roads) {
+      let path = by.get(r.class);
+      if (!path) by.set(r.class, (path = new Path2D()));
+      r.points.forEach(([x, y], k) => (k ? path.lineTo(x, y) : path.moveTo(x, y)));
+    }
+    return { by };
+  }, [world]);
   const risk = useMemo(() => {
     if (!layers || riskLayer === "off") return null;
     return { img: renderRisk(layers[riskLayer], palette.critical), r: layers[riskLayer] };
@@ -163,37 +192,42 @@ export function MapView(props: Props) {
     }
     ctx.imageSmoothingEnabled = true;
 
-    // roads: a light casing under each line keeps them legible on any base
+    // roads: a light casing under each line keeps them legible on any base.
+    // Drawn as one path per class in world coordinates, so a dense network
+    // costs a handful of strokes per frame instead of one per road.
     const onSatellite = baseLayer === "satellite";
     const far = v.mpp > 30;
+    const k = 1 / v.mpp;
+    ctx.save();
+    ctx.setTransform(dpr * k, 0, 0, -dpr * k, dpr * (size.w / 2 - v.cx * k), dpr * (size.h / 2 + v.cy * k));
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    const trace = (pts: Point[]) => {
-      ctx.beginPath();
-      pts.forEach(([x, y], k) => (k ? ctx.lineTo(sx(x), sy(y)) : ctx.moveTo(sx(x), sy(y))));
-      ctx.stroke();
-    };
+    const px = (n: number) => n * v.mpp; // screen pixels to world metres
     for (const pass of ["casing", "line"] as const) {
-      for (const r of world.network.roads) {
-        const paved = r.class === "paved";
-        if (far && r.class === "track" && pass === "casing") continue;
-        ctx.setLineDash(pass === "line" && r.class === "track" ? [5, 4] : []);
-        ctx.globalAlpha = far && r.class === "track" ? 0.45 : pass === "casing" ? 0.85 : 1;
+      for (const cls of ["track", "gravel", "paved"]) {
+        const path = roadPaths.by.get(cls);
+        if (!path) continue;
+        const paved = cls === "paved";
+        if (far && cls === "track" && pass === "casing") continue;
+        ctx.setLineDash(pass === "line" && cls === "track" ? [px(5), px(4)] : []);
+        ctx.globalAlpha = far && cls === "track" ? 0.45 : pass === "casing" ? 0.85 : 1;
         ctx.strokeStyle = pass === "casing" ? (onSatellite ? "#000000" : palette.surface) : onSatellite ? "#f4f1e8" : palette.text2;
-        ctx.lineWidth = pass === "casing" ? (paved ? 5 : 3.2) : paved ? 2.2 : r.class === "gravel" ? 1.3 : 1.1;
-        trace(r.points);
+        ctx.lineWidth = px(pass === "casing" ? (paved ? 5 : 3.2) : paved ? 2.2 : cls === "gravel" ? 1.3 : 1.1);
+        ctx.stroke(path);
       }
     }
+    ctx.restore();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     ctx.fillStyle = onSatellite ? "#f4f1e8" : palette.text2;
+    ctx.beginPath();
     for (const p of world.places) {
-      ctx.beginPath();
+      ctx.moveTo(sx(p.x) + 2.5, sy(p.y));
       ctx.arc(sx(p.x), sy(p.y), 2.5, 0, Math.PI * 2);
-      ctx.fill();
     }
+    ctx.fill();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relief, risk, masks, satellite, imgReady, baseLayer, world, v.cx, v.cy, v.mpp, size, palette]);
+  }, [relief, roadPaths, risk, masks, satellite, imgReady, baseLayer, world, v.cx, v.cy, v.mpp, size, palette]);
 
   // ------------------------------------------------------------ interaction
   const pointerWorld = (ev: React.PointerEvent | React.WheelEvent) => {
@@ -210,7 +244,8 @@ export function MapView(props: Props) {
       const kind = target.getAttribute("data-drag") as DragKind;
       const id = target.getAttribute("data-id") ?? "";
       const p = pointerWorld(ev);
-      setDrag({ kind, id, x: p.e, y: p.n, moved: false });
+      liveDrag.current = { kind, id, x: p.e, y: p.n, moved: false };
+      setDrag(liveDrag.current);
       return;
     }
     pan.current = { x: ev.clientX, y: ev.clientY, view: v, moved: false };
@@ -218,9 +253,13 @@ export function MapView(props: Props) {
 
   const onPointerMove = (ev: React.PointerEvent<SVGSVGElement>) => {
     const p = pointerWorld(ev);
-    setCursor({ x: p.x, y: p.y, e: p.e, n: p.n });
-    if (drag) {
-      setDrag({ ...drag, x: p.e, y: p.n, moved: true });
+    // the readout is written straight to the DOM: re-rendering the map for
+    // every mouse move was the main source of lag
+    if (readout.current) readout.current.textContent = `${fmt(p.e / 1000, 2)} km E · ${fmt(p.n / 1000, 2)} km N · ${fmt(elevation(t, p.e, p.n), 0)} m`;
+    const dragging = liveDrag.current;
+    if (dragging) {
+      liveDrag.current = { ...dragging, x: p.e, y: p.n, moved: true };
+      commit();
       return;
     }
     const d = pan.current;
@@ -230,15 +269,18 @@ export function MapView(props: Props) {
       if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
       if (d.moved) {
         touched.current = true;
-        setView({ ...d.view, cx: d.view.cx - dx * d.view.mpp, cy: d.view.cy + dy * d.view.mpp });
+        liveView.current = { ...d.view, cx: d.view.cx - dx * d.view.mpp, cy: d.view.cy + dy * d.view.mpp };
+        commit();
       }
     }
   };
 
   const onPointerUp = (ev: React.PointerEvent<SVGSVGElement>) => {
-    if (drag) {
-      if (drag.moved) props.onMove(drag.kind, drag.id, drag.x, drag.y);
-      else if (drag.kind === "request") props.onSelect(drag.id);
+    const dragging = liveDrag.current;
+    if (dragging) {
+      if (dragging.moved) props.onMove(dragging.kind, dragging.id, dragging.x, dragging.y);
+      else if (dragging.kind === "request") props.onSelect(dragging.id);
+      liveDrag.current = null;
       setDrag(null);
       return;
     }
@@ -252,10 +294,17 @@ export function MapView(props: Props) {
   };
 
   const onWheel = (ev: React.WheelEvent<SVGSVGElement>) => {
-    const p = pointerWorld(ev);
-    const mpp = Math.min(Math.max(v.mpp * Math.exp(ev.deltaY * 0.0015), 1), (bx1 - bx0) / 200);
+    // zoom about the pointer, from the newest view so fast scrolling compounds
+    const cur = liveView.current;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+    const e = cur.cx + (x - size.w / 2) * cur.mpp;
+    const n = cur.cy - (y - size.h / 2) * cur.mpp;
+    const mpp = Math.min(Math.max(cur.mpp * Math.exp(ev.deltaY * 0.0015), 1), (bx1 - bx0) / 200);
     touched.current = true;
-    setView({ mpp, cx: p.e - (p.x - size.w / 2) * mpp, cy: p.n + (p.y - size.h / 2) * mpp });
+    liveView.current = { mpp, cx: e - (x - size.w / 2) * mpp, cy: n + (y - size.h / 2) * mpp };
+    commit();
   };
 
   const posOf = (kind: DragKind, id: string, x: number, y: number): Point =>
@@ -323,6 +372,7 @@ export function MapView(props: Props) {
     { x0: size.w - 120, y0: 0, x1: size.w, y1: 60 },
   ];
   const labels = placeLabels(labelInputs, obstacles, { w: size.w, h: size.h });
+  const hint = placing ? "Click the map to place it · Esc to cancel" : "Drag to pan · scroll to zoom · drag markers to move them";
 
   return (
     <div className="pmap" ref={wrap} data-placing={placing ?? undefined}>
@@ -334,7 +384,9 @@ export function MapView(props: Props) {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={() => setCursor(null)}
+        onPointerLeave={() => {
+          if (readout.current) readout.current.textContent = hint;
+        }}
         onWheel={onWheel}
       >
         <defs>
@@ -460,12 +512,8 @@ export function MapView(props: Props) {
       </svg>
 
       <div className="pmap-foot">
-        <div className="pmap-readout num">
-          {cursor
-            ? `${fmt(cursor.e / 1000, 2)} km E · ${fmt(cursor.n / 1000, 2)} km N · ${fmt(elevation(t, cursor.e, cursor.n), 0)} m`
-            : placing
-              ? "Click the map to place it · Esc to cancel"
-              : "Drag to pan · scroll to zoom · drag markers to move them"}
+        <div className="pmap-readout num" ref={readout}>
+          {hint}
         </div>
         <div className="pmap-attrib">
           {[...world.attribution, ...(baseLayer === "satellite" && imagery ? [imagery.attribution] : [])].join(" · ")}
