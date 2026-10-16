@@ -18,23 +18,20 @@ follow [Semantic Versioning](https://semver.org/).
   and CSV import/export.
 - Optional AI assistant crate: cloud (Gemini, OpenRouter, Groq, Mistral) or
   local (Ollama, LM Studio, llama.cpp) providers, separate models for chat,
-  vision and small jobs, off by default, with a local-only switch. Settings
-  dialog is present; the assistant workspace is not wired into the app yet.
+  vision and small jobs, off by default, with a local-only switch.
+- App workspaces for *Area intel*, *Supply* and *Assistant*, wired to the
+  engines above. Plan uses the chosen satellite base and supply catalogue.
+- After a flood check, Plan lists requests that lost truck access and
+  suggests drone or aircraft staging.
 - Plan exports as GeoJSON, KML and Cursor-on-Target (ATAK).
 - New app icon (medical cross with lifeline) for Windows, macOS and Linux;
-  README banners use the same mark.
+  README banners and the in-app brand mark use the same mark.
 
 ### Changed
 
 - Planning and map: line-of-sight computed once and cached, map payloads
   sent only when they change, roads drawn in fewer passes, pan/zoom
   updates once per frame.
-
-### Notes
-
-- Area Intel, Supply and AI assistant workspaces are not openable in the
-  app yet. Engine and plan-side hooks are in; UI screens for those tabs
-  remain unfinished.
 
 ## [0.1.0] - 2026-10-15
 
