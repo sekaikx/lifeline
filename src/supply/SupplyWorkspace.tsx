@@ -25,9 +25,7 @@ function shortfallsByRequest(alloc: Allocation | null): Record<string, string[]>
   if (!alloc) return {};
   const out: Record<string, string[]> = {};
   for (const s of alloc.shortfalls) {
-    const item = alloc.picks.find((p) => p.item === s.item)?.item ?? s.item;
-    const name = item;
-    (out[s.request_id] ??= []).push(`${name}: need ${s.needed}, have ${s.picked} (${s.reason})`);
+    (out[s.request_id] ??= []).push(`${s.item}: need ${s.needed}, have ${s.picked} (${s.reason})`);
   }
   return out;
 }
@@ -100,9 +98,38 @@ export function SupplyWorkspace({
     }
   }, [scenario, plan, publish, onStatus]);
 
+  // initial load only; plan/scenario changes re-allocate below
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!snap || !scenario || !plan || !snap.locations.length) {
+      setAlloc(null);
+      if (snap) publish(snap, null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .supplyAllocate(
+        scenario,
+        plan,
+        snap.locations.map((l) => l.id),
+        todayIso(),
+      )
+      .then((a) => {
+        if (cancelled) return;
+        setAlloc(a);
+        publish(snap, a);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(errorText(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scenario, plan, snap, publish]);
 
   useEffect(() => {
     if (snap?.items.length && !draft.item) {

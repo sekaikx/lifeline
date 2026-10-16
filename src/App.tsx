@@ -39,6 +39,15 @@ export default function App() {
     }
   }, [theme]);
 
+  // drop the intel scene when the planning area changes
+  const areaKey = planState?.area
+    ? `${planState.area.name}:${planState.area.lat}:${planState.area.lon}:${planState.area.size_m}`
+    : "";
+  useEffect(() => {
+    setScenePng(null);
+    setSceneBounds(null);
+  }, [areaKey]);
+
   const flash = (msg: string) => {
     setNotice(msg);
     window.clearTimeout(noticeTimer.current);

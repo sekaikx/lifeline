@@ -47,17 +47,19 @@ jobs:
           releaseName: Lifeline v__VERSION__
           releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            Installers for Windows, macOS (Apple Silicon and Intel) and Linux.
+            ## Lifeline v__VERSION__
+
+            Area intel, Supply and Assistant workspaces; satellite explorer (Sentinel-2, Landsat, Sentinel-1); lot-tracked stock with a tamper-evident ledger; optional AI assistant; flood staging when trucks are cut off; GeoJSON / KML / CoT export; new app icon.
 
             | System | File |
             | --- | --- |
             | Windows 10 and 11 | `Lifeline_*_x64-setup.exe` (or the `.msi`) |
             | macOS 10.15 or later | `Lifeline_*_universal.dmg` |
-            | Linux | `Lifeline_*_amd64.AppImage` or `.deb` |
+            | Linux | `Lifeline_*_amd64.AppImage`, `.deb` or `.rpm` |
 
             The installers are not code-signed yet. On Windows, SmartScreen may show "Windows protected your PC": choose More info, then Run anyway. On macOS, right-click the app, choose Open, then confirm.
 
-            See the [README](https://github.com/sekaikx/lifeline#readme) for what Lifeline does and how to use it.
+            Full notes: [CHANGELOG](https://github.com/sekaikx/lifeline/blob/main/CHANGELOG.md). Usage: [README](https://github.com/sekaikx/lifeline#readme).
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

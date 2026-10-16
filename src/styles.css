@@ -100,10 +100,11 @@ h4 {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 12px 0 16px;
+  gap: 12px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  min-height: 44px;
 }
 
 .brand {
@@ -113,25 +114,31 @@ h4 {
   font-weight: 600;
   font-size: 14px;
   letter-spacing: -0.01em;
+  flex-shrink: 0;
 }
 
 .brand img {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .workspaces {
   display: flex;
   height: 100%;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .workspaces button {
   border: 0;
   background: none;
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--text2);
   cursor: pointer;
   box-shadow: inset 0 -2px 0 transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .workspaces button:hover {
@@ -153,12 +160,14 @@ h4 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 40vw;
+  max-width: min(28vw, 320px);
+  flex-shrink: 1;
 }
 
 .actions {
   display: flex;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .workspace {

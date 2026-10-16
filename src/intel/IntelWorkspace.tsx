@@ -61,6 +61,15 @@ export function IntelWorkspace({
     if (!productFits(product, sensor)) setProduct(products[0]?.value ?? "true_color");
   }, [sensor, product, products]);
 
+  // new planning area: drop the previous look
+  useEffect(() => {
+    setImage(null);
+    setChange(null);
+    setScenes([]);
+    setPicked(null);
+    setError(null);
+  }, [area?.name, area?.lat, area?.lon, area?.size_m]);
+
   const list = async () => {
     if (!area) return;
     setBusy("Listing scenes…");

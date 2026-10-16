@@ -31,8 +31,9 @@ KML and Cursor-on-Target for ATAK.
 
 It is built for the planning cell of a relief operation, or a logistics unit
 working where roads are cut, the weather matters and some areas are unsafe.
-It runs on one laptop (Windows, macOS, Linux) and keeps working offline once
-an area has been loaded.
+Five workspaces cover the job: *Plan*, *Area intel*, *Supply*, *Assistant*
+and *Airdrop lab*. It runs on one laptop (Windows, macOS, Linux) and keeps
+working offline once an area has been loaded.
 
 ![Lifeline planning seven deliveries around Gorkha, Nepal: truck routes, a drone flight and an airdrop on real terrain](docs/img/plan.png)
 
@@ -44,12 +45,12 @@ free and has no account, telemetry or licence key.
 
 | System | File | Notes |
 | --- | --- | --- |
-| Windows 10 and 11, 64-bit | [`Lifeline_0.1.0_x64-setup.exe`](https://github.com/sekaikx/lifeline/releases/latest) | Installer, the usual choice |
-| | [`Lifeline_0.1.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
-| macOS, Apple silicon and Intel | [`Lifeline_0.1.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
-| Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.1.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
-| Fedora, RHEL, openSUSE | [`Lifeline-0.1.0-1.x86_64.rpm`](https://github.com/sekaikx/lifeline/releases/latest) | RPM package; install with dnf or zypper |
-| Other Linux, x86-64 | [`Lifeline_0.1.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
+| Windows 10 and 11, 64-bit | [`Lifeline_0.2.0_x64-setup.exe`](https://github.com/sekaikx/lifeline/releases/latest) | Installer, the usual choice |
+| | [`Lifeline_0.2.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
+| macOS, Apple silicon and Intel | [`Lifeline_0.2.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
+| Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.2.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
+| Fedora, RHEL, openSUSE | [`Lifeline-0.2.0-1.x86_64.rpm`](https://github.com/sekaikx/lifeline/releases/latest) | RPM package; install with dnf or zypper |
+| Other Linux, x86-64 | [`Lifeline_0.2.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
 
 The installers are not code-signed yet, so Windows and macOS warn the first
 time you open Lifeline.
@@ -104,9 +105,13 @@ What to try in the first five minutes.
 4. Try the flood check. Load *Dadu, Pakistan*, a 40 km square on the
    Indus. Under *Risk*, in *Satellite flood check*, set *As of* to
    5 September 2022 and press *Detect new water*. Newly flooded land is
-   added as an impassable area and the plan is recomputed around it. Repeat
-   with 5 September 2021 to see the same ground a year before the flood.
-5. *Save* writes the scenario as JSON. *Open* reads it back, and
+   added as an impassable area and the plan is recomputed around it. The
+   *Staging* list shows which requests lost truck access. Repeat with
+   5 September 2021 to see the same ground a year before the flood.
+5. Open *Area intel* to pull Sentinel-2, Landsat or radar for any date, or
+   *Supply* and *Load example* for lot-tracked stock that feeds the plan.
+   *Assistant* stays off until you turn it on in its settings.
+6. *Save* writes the scenario as JSON. *Open* reads it back, and
    the [`lifeline` command](#command-line) plans the same file.
 
 Everything on the map can be dragged: the depot, requests and observed areas.
@@ -143,6 +148,10 @@ The plan updates as you go.
 | ![Sentinel-2 true-colour imagery under the plan](docs/img/satellite.png) | ![Flooded land detected by the trained network, closing roads around Dadu](docs/img/flood.png) |
 | **Truck, drone and airdrop compared for one request** | **Airdrop lab: release point and descent in 3-D** |
 | ![Option comparison panel with route alternatives](docs/img/plan-request.png) | ![Parachute drop simulation with wind profile](docs/img/airdrop-lab.png) |
+| **Area intel: any date, three missions** | **Supply: lots, ledger and FEFO picks** |
+| ![Area intel workspace with a Sentinel-2 scene and A1–H8 grid](docs/img/area-intel.png) | ![Supply workspace with stock lots and allocation](docs/img/supply.png) |
+| **Assistant: plan chat and image reading** | **Staging when flood cuts truck routes** |
+| ![Assistant workspace with settings and chat](docs/img/assistant.png) | ![Plan staging list after a flood check](docs/img/staging.png) |
 
 ## A worked example
 
@@ -339,7 +348,7 @@ npm run tauri dev        # desktop app with hot reload
 npm run tauri build      # installer for your OS
 ```
 
-Pushing a tag such as `v0.1.0` builds the Windows, macOS and Linux
+Pushing a tag such as `v0.2.0` builds the Windows, macOS and Linux
 installers in GitHub Actions and attaches them to a release. Checks, tests
 and style notes for contributors are in [CONTRIBUTING.md](CONTRIBUTING.md).
 

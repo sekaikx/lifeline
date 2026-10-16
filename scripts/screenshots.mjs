@@ -29,7 +29,6 @@ const errors = [];
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 page.on("pageerror", (e) => errors.push(String(e)));
 
-// async, so long downloads do not freeze the page
 await page.exposeFunction(
   "__rpc",
   (cmd, args) =>
@@ -56,6 +55,7 @@ await page.addInitScript((theme) => {
 }, theme);
 
 const shot = (name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const tab = (name) => page.getByRole("tab", { name, exact: true });
 const loadArea = async (label) => {
   await page.getByLabel("Load", { exact: true }).selectOption({ label });
   await page.getByRole("button", { name: "Load area and example plan" }).click();
@@ -79,16 +79,52 @@ await page.getByRole("button", { name: "Satellite" }).click();
 await page.waitForTimeout(12_000);
 await shot("satellite");
 
+// Area intel: mosaic for the current area
+await tab("Area intel").click();
+await page.waitForTimeout(400);
+await page.getByRole("button", { name: "Mosaic to date" }).click();
+await page.waitForSelector(".iv-stage img", { timeout: 600_000 });
+await page.waitForTimeout(1500);
+await shot("area-intel");
+
+// Supply: load example stock
+await tab("Supply").click();
+await page.waitForTimeout(400);
+const example = page.getByRole("button", { name: "Load example" });
+if (await example.isEnabled()) {
+  await example.click();
+  await page.waitForSelector("text=On hand", { timeout: 60_000 });
+  await page.waitForTimeout(800);
+}
+await shot("supply");
+
+// Assistant settings chrome
+await tab("Assistant").click();
+await page.waitForTimeout(400);
+await page.getByRole("button", { name: "Settings" }).click();
+await page.waitForSelector("text=Assistant settings", { timeout: 30_000 });
+await page.waitForTimeout(500);
+await shot("assistant");
+await page.getByRole("button", { name: "Cancel" }).click();
+
+await tab("Plan").click();
+await page.waitForTimeout(400);
+
 await loadArea("Dadu, Pakistan");
-await page.getByLabel(/As of/).fill("2022-09-05");
-const detector = page.getByLabel("Detector");
+const flood = page.locator(".flood");
+await flood.getByLabel(/As of/).fill("2022-09-05");
+const detector = flood.getByLabel("Detector");
 if (await detector.count()) await detector.selectOption("model");
-await page.getByRole("button", { name: "Detect new water" }).click();
+await flood.getByRole("button", { name: "Detect new water" }).click();
 await page.waitForSelector("text=New water on", { timeout: 600_000 });
 await page.waitForTimeout(6000);
 await shot("flood");
+// staging panel after replan
+await page.waitForSelector("text=Staging", { timeout: 120_000 }).catch(() => {});
+await page.waitForTimeout(1500);
+await shot("staging");
 
-await page.getByRole("tab", { name: "Airdrop lab" }).click();
+await tab("Airdrop lab").click();
 await page.waitForTimeout(4000);
 await shot("airdrop-lab");
 

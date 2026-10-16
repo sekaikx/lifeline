@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-ai"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 6.0.0",
@@ -2106,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-airdrop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lifeline-core",
  "rayon",
@@ -2116,7 +2116,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lifeline-ai",
  "lifeline-airdrop",
@@ -2132,7 +2132,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "lifeline-ai",
@@ -2147,7 +2147,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rayon",
  "serde",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-drone"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lifeline-core",
  "serde",
@@ -2165,7 +2165,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-geodata"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 6.0.0",
@@ -2181,7 +2181,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-ground"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lifeline-core",
  "serde",
@@ -2190,7 +2190,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-planner"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lifeline-airdrop",
  "lifeline-core",
@@ -2204,7 +2204,7 @@ dependencies = [
 
 [[package]]
 name = "lifeline-supply"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dirs 6.0.0",
  "lifeline-planner",
