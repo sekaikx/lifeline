@@ -49,7 +49,7 @@ jobs:
           releaseBody: |
             ## Lifeline v__VERSION__
 
-            Area intel, Supply and Assistant workspaces; satellite explorer (Sentinel-2, Landsat, Sentinel-1); lot-tracked stock with a tamper-evident ledger; optional AI assistant; flood staging when trucks are cut off; GeoJSON / KML / CoT export; new app icon.
+            Supply ledger (lots, classes I–X, FEFO, two-person rule); Area intel (Sentinel-2, Landsat, Sentinel-1); Assistant; flood staging when trucks are cut off; GeoJSON / KML / CoT export; new app icon.
 
             | System | File |
             | --- | --- |

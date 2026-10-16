@@ -108,8 +108,8 @@ export default function App() {
 
   const tabs: { id: Workspace; label: string }[] = [
     { id: "plan", label: "Plan" },
-    { id: "intel", label: "Area intel" },
     { id: "supply", label: "Supply" },
+    { id: "intel", label: "Area intel" },
     { id: "assistant", label: "Assistant" },
     { id: "lab", label: "Airdrop lab" },
   ];

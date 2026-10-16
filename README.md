@@ -22,20 +22,26 @@
 Lifeline is an open-source resupply planner for disaster response and
 contested logistics. It decides how to get supplies to places that are hard or dangerous to
 reach: by truck on the real road network, by drone, or by parachute airdrop.
-It works on real terrain, OpenStreetMap roads, live weather forecasts and
-satellite imagery (Sentinel-2, Landsat and Sentinel-1 radar), recognises
-flooded land with a water index or an optional trained network, and produces
-a schedule that says which vehicle goes where, when the supplies arrive, how
-likely they are to arrive intact, and what it costs. Plans export as GeoJSON,
-KML and Cursor-on-Target for ATAK.
+Stock is tracked by lot against the ten classes of supply (cold chain,
+controlled items, a tamper-evident ledger), then assigned to those trips
+oldest-expiry first. It works on real terrain, OpenStreetMap roads, live
+weather forecasts and satellite imagery (Sentinel-2, Landsat and Sentinel-1
+radar), recognises flooded land with a water index or an optional trained
+network, and produces a schedule that says which vehicle goes where, when
+the supplies arrive, how likely they are to arrive intact, and what it costs.
+Plans export as GeoJSON, KML and Cursor-on-Target for ATAK.
 
 It is built for the planning cell of a relief operation, or a logistics unit
 working where roads are cut, the weather matters and some areas are unsafe.
-Five workspaces cover the job: *Plan*, *Area intel*, *Supply*, *Assistant*
+Five workspaces cover the job: *Plan*, *Supply*, *Area intel*, *Assistant*
 and *Airdrop lab*. It runs on one laptop (Windows, macOS, Linux) and keeps
 working offline once an area has been loaded.
 
 ![Lifeline planning seven deliveries around Gorkha, Nepal: truck routes, a drone flight and an airdrop on real terrain](docs/img/plan.png)
+
+| Supply: lots, ledger and FEFO allocation | Area intel: any date, three missions |
+| --- | --- |
+| ![Supply workspace with stock lots and allocation](docs/img/supply.png) | ![Area intel workspace with a Sentinel-2 scene and A1–H8 grid](docs/img/area-intel.png) |
 
 ## Download
 
@@ -108,9 +114,10 @@ What to try in the first five minutes.
    added as an impassable area and the plan is recomputed around it. The
    *Staging* list shows which requests lost truck access. Repeat with
    5 September 2021 to see the same ground a year before the flood.
-5. Open *Area intel* to pull Sentinel-2, Landsat or radar for any date, or
-   *Supply* and *Load example* for lot-tracked stock that feeds the plan.
-   *Assistant* stays off until you turn it on in its settings.
+5. Open *Supply* and *Load example* for lot-tracked stock (classes I–X,
+   ledger, FEFO picks against the plan). Open *Area intel* for Sentinel-2,
+   Landsat or radar on any date. *Assistant* stays off until you turn it on
+   in its settings.
 6. *Save* writes the scenario as JSON. *Open* reads it back, and
    the [`lifeline` command](#command-line) plans the same file.
 
@@ -146,12 +153,10 @@ The plan updates as you go.
 | Satellite layer over Gorkha | Flood check, Dadu, September 2022 |
 | --- | --- |
 | ![Sentinel-2 true-colour imagery under the plan](docs/img/satellite.png) | ![Flooded land detected by the trained network, closing roads around Dadu](docs/img/flood.png) |
-| **Truck, drone and airdrop compared for one request** | **Airdrop lab: release point and descent in 3-D** |
-| ![Option comparison panel with route alternatives](docs/img/plan-request.png) | ![Parachute drop simulation with wind profile](docs/img/airdrop-lab.png) |
-| **Area intel: any date, three missions** | **Supply: lots, ledger and FEFO picks** |
-| ![Area intel workspace with a Sentinel-2 scene and A1–H8 grid](docs/img/area-intel.png) | ![Supply workspace with stock lots and allocation](docs/img/supply.png) |
-| **Assistant: plan chat and image reading** | **Staging when flood cuts truck routes** |
-| ![Assistant workspace with settings and chat](docs/img/assistant.png) | ![Plan staging list after a flood check](docs/img/staging.png) |
+| **Truck, drone and airdrop compared for one request** | **Staging when flood cuts truck routes** |
+| ![Option comparison panel with route alternatives](docs/img/plan-request.png) | ![Plan staging list after a flood check](docs/img/staging.png) |
+| **Assistant: plan chat and image reading** | **Airdrop lab: release point and descent in 3-D** |
+| ![Assistant workspace with settings and chat](docs/img/assistant.png) | ![Parachute drop simulation with wind profile](docs/img/airdrop-lab.png) |
 
 ## A worked example
 

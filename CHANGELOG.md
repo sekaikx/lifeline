@@ -8,14 +8,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- *Area intel* workspace: Sentinel-2 (2017–), Landsat (1982–) and Sentinel-1
-  radar through Planetary Computer; true colour, infrared, agriculture,
-  vegetation, moisture, water, burn and radar products; two-date change maps;
-  A1–H8 grid; apply a scene as the Plan map base.
 - *Supply* workspace: lot-tracked stock by the ten classes of supply,
   cold-chain and controlled-item rules, tamper-evident ledger with two-person
   sign-off, FEFO allocation to the current plan, CSV import/export, example
   stock.
+- *Area intel* workspace: Sentinel-2 (2017–), Landsat (1982–) and Sentinel-1
+  radar through Planetary Computer; true colour, infrared, agriculture,
+  vegetation, moisture, water, burn and radar products; two-date change maps;
+  A1–H8 grid; apply a scene as the Plan map base.
 - *Assistant* workspace: optional chat over the current plan, parse radio-style
   text into a request, read a satellite scene; cloud or local models; off by
   default with a local-only switch.
