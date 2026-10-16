@@ -835,6 +835,47 @@ select.select {
   font-size: 12px;
 }
 
+.access-note {
+  border-left: 2px solid var(--critical);
+  padding-left: 10px;
+}
+
+.staging-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.staging-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+.staging-row:hover {
+  background: var(--surface2);
+}
+
+.staging-row[aria-pressed="true"] {
+  background: var(--surface2);
+  box-shadow: inset 2px 0 0 var(--text);
+}
+
+.staging-reason {
+  margin: 0 0 4px 34px;
+}
+
 .late {
   color: var(--critical);
 }
