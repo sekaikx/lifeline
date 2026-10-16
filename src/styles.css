@@ -4,14 +4,15 @@
  * transport modes and danger. Everything else is ink on paper.
  */
 :root {
-  --bg: #f3f2ef;
-  --surface: #fcfcfb;
-  --surface2: #efeee9;
-  --border: #dcdad3;
-  --text: #0b0b0b;
-  --text2: #52514e;
-  --muted: #6f6d68;
-  --grid: #e6e4de;
+  --bg: #f3f4f7;
+  --accent: #2563eb;
+  --surface: #ffffff;
+  --surface2: #eef0f4;
+  --border: #dadde5;
+  --text: #0b0d14;
+  --text2: #4a5062;
+  --muted: #6b7183;
+  --grid: #e7e9ef;
   --blue: #2a78d6;
   --orange: #eb6834;
   --aqua: #1baf7a;
@@ -1271,4 +1272,151 @@ table.data th {
 
 .u-select {
   background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+}
+
+/* ------------------------------------------------------------ dialogs, tags */
+
+.dialog {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.28);
+}
+
+.dialog.wide {
+  width: min(860px, calc(100vw - 48px));
+}
+
+.dialog::backdrop {
+  background: rgb(5 7 12 / 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialog-head h2 {
+  font-size: 15px;
+}
+
+.dialog-body {
+  padding: 16px 18px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.tag.accent {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tag.good {
+  color: var(--aqua);
+  border-color: color-mix(in srgb, var(--aqua) 45%, transparent);
+  background: color-mix(in srgb, var(--aqua) 10%, transparent);
+}
+
+.tag.warn {
+  color: var(--orange);
+  border-color: color-mix(in srgb, var(--orange) 45%, transparent);
+  background: color-mix(in srgb, var(--orange) 10%, transparent);
+}
+
+.tag.critical {
+  color: var(--critical);
+  border-color: color-mix(in srgb, var(--critical) 45%, transparent);
+  background: color-mix(in srgb, var(--critical) 10%, transparent);
+}
+
+/* AI settings dialog */
+.ai-providers,
+.ai-add,
+.ai-roles {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-add {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.ai-provider {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.ai-provider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-provider-head > .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-role {
+  display: grid;
+  grid-template-columns: 110px 160px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .ai-role {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-error {
+  color: var(--critical);
+  margin: 0;
+}
+
+.small-muted {
+  font-size: 11px;
+  color: var(--muted);
 }

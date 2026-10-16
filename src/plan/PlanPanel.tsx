@@ -3,7 +3,22 @@ import { NumberField, SelectField } from "../components/Field";
 import { fmt, fmtClock, fmtKg, fmtMoney, fmtPct } from "../lib/format";
 import type { Palette } from "../lib/theme";
 import { INK_ON_MODE, modeColor } from "./MapView";
-import type { Assignment, Mode, ModeChoice, ModeOption, Plan, PlanScenario, Priority, Request } from "./types";
+import type { Item } from "../supply/types";
+import type { Assignment, Mode, ModeChoice, ModeOption, Plan, PlanScenario, Priority, Request, RequestLine } from "./types";
+
+/** Demand and transit limit that follow from a request's catalogue lines. */
+export function linesPatch(lines: RequestLine[], catalogue: Item[]): Partial<Request> {
+  if (!lines.length) return { items: [], max_transit_h: null };
+  let kg = 0;
+  let limit: number | null = null;
+  for (const l of lines) {
+    const it = catalogue.find((c) => c.id === l.item);
+    if (!it) continue;
+    kg += it.unit_kg * l.quantity;
+    if (it.max_transit_h != null) limit = limit == null ? it.max_transit_h : Math.min(limit, it.max_transit_h);
+  }
+  return { items: lines, demand_kg: Math.max(Number(kg.toFixed(3)), 0.1), max_transit_h: limit };
+}
 
 const MODE_LABEL: Record<Mode, string> = { truck: "Truck", drone: "Drone", airdrop: "Aircraft" };
 const PRIORITY_LABEL: Record<Priority, string> = { critical: "Critical", high: "High", routine: "Routine" };
@@ -18,6 +33,11 @@ interface Props {
   onDeleteRequest: (id: string) => void;
   onAddRequest: () => void;
   adding: boolean;
+  /** Supply catalogue and units available at the depot, by item */
+  catalogue: Item[];
+  available: Record<string, number>;
+  /** Shortfalls by request, from the supply allocation */
+  shortfalls: Record<string, string[]>;
 }
 
 function Badge({ id, mode, palette, late }: { id: string; mode: Mode | null; palette: Palette; late?: boolean }) {
@@ -90,6 +110,9 @@ export function PlanPanel(props: Props) {
           assignment={assignment}
           scenario={scenario}
           palette={palette}
+          catalogue={props.catalogue}
+          available={props.available}
+          shortfalls={props.shortfalls[request.id] ?? []}
           onChange={(patch) => props.onChangeRequest(request.id, patch)}
           onDelete={() => props.onDeleteRequest(request.id)}
         />
@@ -150,6 +173,9 @@ function RequestDetail({
   assignment: a,
   scenario,
   palette,
+  catalogue,
+  available,
+  shortfalls,
   onChange,
   onDelete,
 }: {
@@ -157,6 +183,9 @@ function RequestDetail({
   assignment: Assignment | undefined;
   scenario: PlanScenario;
   palette: Palette;
+  catalogue: Item[];
+  available: Record<string, number>;
+  shortfalls: string[];
   onChange: (patch: Partial<Request>) => void;
   onDelete: () => void;
 }) {
@@ -182,7 +211,14 @@ function RequestDetail({
           <span>Name</span>
           <input className="text-input" value={r.name} onChange={(e) => onChange({ name: e.target.value })} />
         </label>
-        <NumberField label="Demand" unit="kg" min={0.1} step={50} value={r.demand_kg} onChange={(v) => onChange({ demand_kg: v })} />
+        {r.items?.length ? (
+          <div className="field">
+            <span>Demand</span>
+            <span className="num computed">{fmtKg(r.demand_kg)}</span>
+          </div>
+        ) : (
+          <NumberField label="Demand" unit="kg" min={0.1} step={50} value={r.demand_kg} onChange={(v) => onChange({ demand_kg: v })} />
+        )}
         <NumberField label="Needed within" unit="h" min={0.1} step={0.5} value={r.due_h} onChange={(v) => onChange({ due_h: v })} />
         <SelectField<Priority>
           label="Priority"
@@ -206,6 +242,8 @@ function RequestDetail({
           onChange={(v) => onChange({ mode: v })}
         />
       </div>
+
+      <RequestItems request={r} catalogue={catalogue} available={available} shortfalls={shortfalls} onChange={onChange} />
 
       {a && (
         <>
@@ -309,6 +347,103 @@ function ModeDetail({ option: o, chosen, scenario }: { option: ModeOption; chose
           (CEP {fmt(d.cep_m, 0)} m) and {fmtPct(d.survival, 1)} for the aircraft reaching the release point.
         </p>
       )}
+    </div>
+  );
+}
+
+/** What a request asks for, by catalogue item. Demand and the transit limit follow. */
+function RequestItems({
+  request: r,
+  catalogue,
+  available,
+  shortfalls,
+  onChange,
+}: {
+  request: Request;
+  catalogue: Item[];
+  available: Record<string, number>;
+  shortfalls: string[];
+  onChange: (patch: Partial<Request>) => void;
+}) {
+  const lines = r.items ?? [];
+  const set = (next: RequestLine[]) => onChange(linesPatch(next, catalogue));
+  const unused = catalogue.filter((c) => !lines.some((l) => l.item === c.id));
+  if (!catalogue.length && !lines.length) {
+    return <p className="note">Load stock in the Supply workspace to request specific items; demand is then their weight.</p>;
+  }
+  return (
+    <div className="req-items">
+      <div className="block-head">
+        <h3>Items</h3>
+        {unused.length > 0 && (
+          <select
+            className="select add-item"
+            value=""
+            aria-label="Add an item"
+            onChange={(e) => e.target.value && set([...lines, { item: e.target.value, quantity: 1 }])}
+          >
+            <option value="">Add item…</option>
+            {unused.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {lines.map((l, k) => {
+        const it = catalogue.find((c) => c.id === l.item);
+        const have = available[l.item] ?? 0;
+        return (
+          <div key={l.item} className="req-item">
+            <div className="req-item-name">
+              <span>{it?.name ?? l.item}</span>
+              <span className="note num">
+                {it ? `${fmtKg(it.unit_kg * l.quantity)} · ${have} ${it.unit} in stock` : "not in the catalogue"}
+                {it?.cold_chain && ` · cold chain ${it.cold_chain.min_c}–${it.cold_chain.max_c} °C`}
+                {it?.controlled && " · controlled"}
+              </span>
+            </div>
+            <NumberInputCompact
+              value={l.quantity}
+              unit={it?.unit ?? ""}
+              warn={have < l.quantity}
+              onChange={(q) => set(lines.map((x, j) => (j === k ? { ...x, quantity: q } : x)))}
+            />
+            <button className="row-btn" aria-label={`Remove ${it?.name ?? l.item}`} onClick={() => set(lines.filter((_, j) => j !== k))}>
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      {r.max_transit_h != null && lines.length > 0 && (
+        <p className="note">Cargo may spend at most {fmtClock(r.max_transit_h)} in transit; slower modes are not used.</p>
+      )}
+      {shortfalls.map((t) => (
+        <p key={t} className="note late">
+          {t}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function NumberInputCompact({ value, unit, warn, onChange }: { value: number; unit: string; warn: boolean; onChange: (v: number) => void }) {
+  return (
+    <div className={`input-wrap qty${warn ? " invalid" : ""}`} title={warn ? "More than is in stock" : undefined}>
+      <input
+        inputMode="decimal"
+        aria-label="Quantity"
+        defaultValue={value}
+        key={value}
+        onBlur={(e) => {
+          const v = Number(e.target.value);
+          if (Number.isFinite(v) && v > 0 && v !== value) onChange(v);
+          else e.target.value = String(value);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+      <span className="unit">{unit}</span>
     </div>
   );
 }

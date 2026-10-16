@@ -6,11 +6,28 @@ import { MapView, modeColor, type BaseLayer, type Placing, type RiskLayer } from
 import { PlanPanel } from "./PlanPanel";
 import { floodSummary, SetupPanel, type DataActions } from "./SetupPanel";
 import { Timeline } from "./Timeline";
-import { isPlanScenario, type Area, type Imagery, type Plan, type PlanScenario, type Request, type RiskLayers, type World } from "./types";
+import type { SatelliteChoice, SceneImage } from "../intel/types";
+import type { Item } from "../supply/types";
+import { isPlanScenario, type Area, type Plan, type PlanScenario, type Request, type RiskLayers, type World } from "./types";
+
+/** What the rest of the app needs to know about the plan. */
+export interface PlanState {
+  scenario: PlanScenario;
+  plan: Plan | null;
+  world: World;
+  area: Area | null;
+}
+
+/** Supply data the plan shows next to requests. */
+export interface SupplyView {
+  catalogue: Item[];
+  available: Record<string, number>;
+  shortfalls: Record<string, string[]>;
+}
 
 const STORAGE_KEY = "lifeline.plan.v2";
 
-const areaOf = (s: PlanScenario | null): Area | null =>
+export const areaOf = (s: PlanScenario | null): Area | null =>
   s && s.world.type === "real"
     ? { name: s.world.name, lat: s.world.lat, lon: s.world.lon, size_m: s.world.size_m, cell_m: s.world.cell_m }
     : null;
@@ -34,6 +51,9 @@ export interface WorkspaceHandle {
   scenario: PlanScenario | null;
   setScenario: (s: PlanScenario) => void;
   reset: () => void;
+  /** Add a request (a fresh id is assigned) and select it */
+  addRequest: (r: Omit<Request, "id">) => string;
+  update: (fn: (s: PlanScenario) => PlanScenario) => void;
 }
 
 export function PlanWorkspace({
@@ -41,11 +61,17 @@ export function PlanWorkspace({
   theme,
   onStatus,
   handle,
+  satellite,
+  supply,
+  onState,
 }: {
   palette: Palette;
   theme: ThemeMode;
   onStatus: (s: string) => void;
   handle: React.MutableRefObject<WorkspaceHandle | null>;
+  satellite: SatelliteChoice;
+  supply: SupplyView;
+  onState: (s: PlanState | null) => void;
 }) {
   const [scenario, setScenario] = useState<PlanScenario | null>(loadSaved);
   const [world, setWorld] = useState<World | null>(null);
@@ -57,7 +83,7 @@ export function PlanWorkspace({
   const [placing, setPlacing] = useState<Placing>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("relief");
-  const [imagery, setImagery] = useState<{ key: string; data: Imagery } | null>(null);
+  const [imagery, setImagery] = useState<{ key: string; data: SceneImage } | null>(null);
   const [flood, setFlood] = useState<string | null>(null);
   const [waterModel, setWaterModel] = useState<string | null>(null);
   const [worldAttempt, setWorldAttempt] = useState(0);
@@ -92,7 +118,22 @@ export function PlanWorkspace({
     if (!scenario && !busy && !error) loadArea(null);
   }, [scenario, busy, error, loadArea]);
 
-  handle.current = { scenario, setScenario: (s) => { setScenario(s); setSelected(null); }, reset };
+  const update = useCallback((fn: (s: PlanScenario) => PlanScenario) => setScenario((s) => (s ? fn(s) : s)), []);
+  handle.current = {
+    scenario,
+    setScenario: (s) => {
+      setScenario(s);
+      setSelected(null);
+    },
+    reset,
+    update,
+    addRequest: (r) => {
+      const id = nextId("R", scenario?.requests.map((q) => q.id) ?? []);
+      update((s) => ({ ...s, requests: [...s.requests, { ...r, id }] }));
+      setSelected(id);
+      return id;
+    },
+  };
 
   // keep the last scenario across restarts; written when edits pause, since
   // serialising a large scenario on every drag step is what made edits stutter
@@ -123,19 +164,20 @@ export function PlanWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specKey, worldAttempt]);
 
-  // satellite imagery, fetched when the layer is first shown for an area
+  // satellite base: the scene and product chosen in Area intel (default: the
+  // clearest recent Sentinel-2 mosaic), fetched when the layer is shown
   const area = areaOf(scenario);
-  const areaKey = area ? JSON.stringify(area) : "";
+  const areaKey = area ? JSON.stringify([area, satellite]) : "";
   useEffect(() => {
     if (baseLayer !== "satellite" || !area || imagery?.key === areaKey) return;
     let live = true;
-    onStatus("Fetching Sentinel-2 imagery…");
+    onStatus("Fetching satellite imagery…");
     api
-      .imagery(area)
+      .sceneImage(area, satellite.query, satellite.product)
       .then((data) => {
         if (!live) return;
         setImagery({ key: areaKey, data });
-        onStatus(`Sentinel-2 imagery from ${[...new Set(data.scenes.map((x) => x.date))].join(", ")}`);
+        onStatus(`${data.scenes[0]?.sensor === "landsat" ? "Landsat" : data.scenes[0]?.sensor === "sentinel1" ? "Sentinel-1" : "Sentinel-2"} imagery from ${[...new Set(data.scenes.map((x) => x.date))].join(", ")}`);
       })
       .catch((e) => live && setError(errorText(e)));
     return () => {
@@ -179,7 +221,11 @@ export function PlanWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const update = useCallback((fn: (s: PlanScenario) => PlanScenario) => setScenario((s) => (s ? fn(s) : s)), []);
+  // tell the app (assistant, supply, area intel) what is being planned
+  useEffect(() => {
+    onState(scenario && world ? { scenario, plan, world, area: areaOf(scenario) } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenario, plan, world]);
 
   if (!scenario || !world) {
     return (
@@ -315,7 +361,7 @@ export function PlanWorkspace({
             placing={placing}
             onPlace={place}
             onMove={move}
-            keyHeight={area ? 112 : 78}
+            keyHeight={area ? 146 : 78}
             baseLayer={area ? baseLayer : "relief"}
             imagery={imagery?.key === areaKey ? imagery.data : null}
           />
@@ -348,6 +394,34 @@ export function PlanWorkspace({
                 onChange={setRiskLayer}
               />
             </div>
+            {area && (
+              <div className="map-key-row">
+                <span className="map-key-title">Export</span>
+                <div className="segmented" role="group" aria-label="Export plan">
+                  {(
+                    [
+                      ["geojson", "GeoJSON"],
+                      ["kml", "KML"],
+                      ["cot", "ATAK"],
+                    ] as const
+                  ).map(([f, label]) => (
+                    <button
+                      key={f}
+                      type="button"
+                      title={f === "cot" ? "Cursor-on-Target events for ATAK, WinTAK and iTAK" : f === "kml" ? "Google Earth, ATAK, QGIS" : "QGIS, ArcGIS, web maps"}
+                      onClick={() =>
+                        api
+                          .exportPlan(scenario, plan, f)
+                          .then((path) => path && onStatus(`Exported ${path}`))
+                          .catch((e) => setError(errorText(e)))
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="legend">
               <span>
                 <span className="line" style={{ borderColor: modeColor(palette, "truck") }} />
@@ -386,6 +460,9 @@ export function PlanWorkspace({
         onSelect={setSelected}
         adding={placing === "request"}
         onAddRequest={() => setPlacing(placing === "request" ? null : "request")}
+        catalogue={supply.catalogue}
+        available={supply.available}
+        shortfalls={supply.shortfalls}
         onChangeRequest={(id, patch) => update((s) => ({ ...s, requests: s.requests.map((r) => (r.id === id ? { ...r, ...patch } : r)) }))}
         onDeleteRequest={(id) => {
           update((s) => ({ ...s, requests: s.requests.filter((r) => r.id !== id) }));

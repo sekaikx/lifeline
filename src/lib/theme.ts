@@ -6,6 +6,8 @@ export type ThemeMode = "light" | "dark";
 
 export interface Palette {
   bg: string;
+  /** Brand blue: selection, focus, primary actions */
+  accent: string;
   surface: string;
   surface2: string;
   border: string;
@@ -24,14 +26,15 @@ export interface Palette {
 
 export const palettes: Record<ThemeMode, Palette> = {
   light: {
-    bg: "#f3f2ef",
-    surface: "#fcfcfb",
-    surface2: "#efeee9",
-    border: "#dcdad3",
-    text: "#0b0b0b",
-    text2: "#52514e",
-    muted: "#6f6d68",
-    grid: "#e6e4de",
+    bg: "#f3f4f7",
+    accent: "#2563eb",
+    surface: "#ffffff",
+    surface2: "#eef0f4",
+    border: "#dadde5",
+    text: "#0b0d14",
+    text2: "#4a5062",
+    muted: "#6b7183",
+    grid: "#e7e9ef",
     blue: "#2a78d6",
     orange: "#eb6834",
     aqua: "#1baf7a",
@@ -41,14 +44,15 @@ export const palettes: Record<ThemeMode, Palette> = {
     groundLine: "#aab19c",
   },
   dark: {
-    bg: "#121211",
-    surface: "#1a1a19",
-    surface2: "#242422",
-    border: "#33322f",
-    text: "#f0efec",
-    text2: "#c3c2b7",
-    muted: "#8d8b83",
-    grid: "#2c2b28",
+    bg: "#08090d",
+    accent: "#4f8ff7",
+    surface: "#10121a",
+    surface2: "#181b25",
+    border: "#262a37",
+    text: "#eef0f6",
+    text2: "#b6bbc9",
+    muted: "#7f8597",
+    grid: "#1d2029",
     blue: "#3987e5",
     orange: "#d95926",
     aqua: "#199e70",

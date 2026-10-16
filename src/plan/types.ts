@@ -84,6 +84,15 @@ export interface Request {
   priority: Priority;
   due_h: number;
   mode: ModeChoice;
+  /** Catalogue lines; when present demand_kg is their total weight */
+  items?: RequestLine[];
+  /** Longest the cargo may be in transit [h] */
+  max_transit_h?: number | null;
+}
+
+export interface RequestLine {
+  item: string;
+  quantity: number;
 }
 
 export interface RiskSite {

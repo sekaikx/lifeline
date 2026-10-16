@@ -3,7 +3,10 @@ import { AirdropLab, type LabHandle } from "./airdrop/AirdropLab";
 import { isDropScenario, type Scenario as DropScenario } from "./airdrop/types";
 import { api, errorText, hasBackend } from "./lib/api";
 import { applyTheme, initialTheme, palettes, type ThemeMode } from "./lib/theme";
+import { defaultSatellite } from "./intel/types";
 import { PlanWorkspace, type WorkspaceHandle } from "./plan/PlanWorkspace";
+
+const NO_SUPPLY = { catalogue: [], available: {}, shortfalls: {} };
 import { isPlanScenario } from "./plan/types";
 
 type Workspace = "plan" | "lab";
@@ -119,7 +122,7 @@ export default function App() {
       </header>
       {/* both stay mounted so switching keeps each workspace's state */}
       <div className="workspace" hidden={workspace !== "plan"}>
-        <PlanWorkspace palette={palette} theme={theme} onStatus={setStatus} handle={planHandle} />
+        <PlanWorkspace palette={palette} theme={theme} onStatus={setStatus} handle={planHandle} satellite={defaultSatellite} supply={NO_SUPPLY} onState={() => {}} />
       </div>
       <div className="workspace" hidden={workspace !== "lab"}>
         {workspace === "lab" || labHandle.current ? <AirdropLab palette={palette} onStatus={setStatus} handle={labHandle} initial={labInitial} /> : null}

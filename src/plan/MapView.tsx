@@ -24,7 +24,7 @@ interface Props {
   onPlace: (x: number, y: number) => void;
   onMove: (kind: DragKind, id: string, x: number, y: number) => void;
   baseLayer: BaseLayer;
-  imagery: Imagery | null;
+  imagery: Pick<Imagery, "png_base64" | "bounds" | "attribution"> | null;
   /** Height of the map key overlay, kept clear of labels [px] */
   keyHeight: number;
 }

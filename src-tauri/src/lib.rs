@@ -329,14 +329,19 @@ fn atmosphere_profile(scenario: drop::Scenario, z_max: f64, rows: usize) -> Vec<
 
 // ------------------------------------------------------------------ files
 
-/// Ask the user for a JSON file and return its text, or `None` if cancelled.
+/// Ask the user for a scenario (JSON) or a spreadsheet (CSV) and return its
+/// text, or `None` if cancelled.
 #[tauri::command]
-async fn open_text(app: AppHandle) -> Result<Option<String>, String> {
+async fn open_text(app: AppHandle, kind: Option<String>) -> Result<Option<String>, String> {
+    let (label, ext): (&str, &[&str]) = match kind.as_deref() {
+        Some("csv") => ("Spreadsheet (CSV)", &["csv", "txt"]),
+        _ => ("Scenario", &["json"]),
+    };
     compute(move || {
         let Some(path) = app
             .dialog()
             .file()
-            .add_filter("Scenario", &["json"])
+            .add_filter(label, ext)
             .blocking_pick_file()
         else {
             return Ok(None);
