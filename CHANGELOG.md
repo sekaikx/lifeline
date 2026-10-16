@@ -4,6 +4,38 @@ Notable changes to Lifeline. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Satellite explorer engine: Sentinel-2 (2017–), Landsat (1982–) and
+  Sentinel-1 radar through Planetary Computer, with true colour, infrared,
+  agriculture, vegetation, moisture, water and burn products, plus two-date
+  change maps for flooding, vegetation loss and burns.
+- Supply ledger crate: lot-tracked stock by the ten classes of supply,
+  cold-chain and controlled-item rules, a tamper-evident movement log,
+  two-person sign-off for controlled items, FEFO allocation to deliveries,
+  and CSV import/export.
+- Optional AI assistant crate: cloud (Gemini, OpenRouter, Groq, Mistral) or
+  local (Ollama, LM Studio, llama.cpp) providers, separate models for chat,
+  vision and small jobs, off by default, with a local-only switch. Settings
+  dialog is present; the assistant workspace is not wired into the app yet.
+- Plan exports as GeoJSON, KML and Cursor-on-Target (ATAK).
+- New app icon (medical cross with lifeline) for Windows, macOS and Linux;
+  README banners use the same mark.
+
+### Changed
+
+- Planning and map: line-of-sight computed once and cached, map payloads
+  sent only when they change, roads drawn in fewer passes, pan/zoom
+  updates once per frame.
+
+### Notes
+
+- Area Intel, Supply and AI assistant workspaces are not openable in the
+  app yet. Engine and plan-side hooks are in; UI screens for those tabs
+  remain unfinished.
+
 ## [0.1.0] - 2026-10-15
 
 First public release.

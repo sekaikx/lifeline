@@ -23,9 +23,11 @@ Lifeline is an open-source resupply planner for disaster response and
 contested logistics. It decides how to get supplies to places that are hard or dangerous to
 reach: by truck on the real road network, by drone, or by parachute airdrop.
 It works on real terrain, OpenStreetMap roads, live weather forecasts and
-Sentinel-2 satellite imagery, recognises flooded land with a trained neural
-network, and produces a schedule that says which vehicle goes where, when the
-supplies arrive, how likely they are to arrive intact, and what it costs.
+satellite imagery (Sentinel-2, Landsat and Sentinel-1 radar), recognises
+flooded land with a water index or an optional trained network, and produces
+a schedule that says which vehicle goes where, when the supplies arrive, how
+likely they are to arrive intact, and what it costs. Plans export as GeoJSON,
+KML and Cursor-on-Target for ATAK.
 
 It is built for the planning cell of a relief operation, or a logistics unit
 working where roads are cut, the weather matters and some areas are unsafe.
@@ -232,6 +234,8 @@ environment variable at the file.
 | Wind forecast | [MET Norway Locationforecast](https://api.met.no/) (default; surface wind, extended aloft with a power law) | CC BY 4.0 |
 | Wind profile, alternative | [Open-Meteo](https://open-meteo.com/) | free API non-commercial; commercial use needs a key (`OPEN_METEO_API_KEY`) |
 | Imagery, water | Copernicus Sentinel-2 L2A via [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) | Copernicus open licence |
+| Imagery, archive | Landsat Collection 2 via Planetary Computer | USGS / NASA open data |
+| Imagery, radar | Copernicus Sentinel-1 GRD via Planetary Computer | Copernicus open licence |
 | Permanent water | [ESA WorldCover 2021](https://esa-worldcover.org/) | CC BY 4.0 |
 | Flood training labels | [Sen1Floods11](https://github.com/cloudtostreet/Sen1Floods11), hand-labelled split | no explicit licence; used for training only |
 
@@ -308,13 +312,15 @@ crates/core       terrain, atmosphere, wind, line of sight, exposure, search, st
 crates/airdrop    parachute physics, integrators, release-point solver, Monte Carlo
 crates/ground     road network, truck model, risk-weighted routing
 crates/drone      drone energy model, wind triangle, path planning, radio link
-crates/geodata    open-data loaders, disk cache, flood detection, ONNX runner
-crates/planner    scenario model, option evaluation, scheduler
+crates/geodata    open-data loaders, disk cache, flood detection, satellite explorer, ONNX runner
+crates/planner    scenario model, option evaluation, scheduler, GeoJSON/KML/CoT export
+crates/supply     lot-tracked stock, ledger, FEFO allocation, CSV import/export
+crates/ai         optional assistant: providers, settings, vision and chat tasks
 crates/cli        the `lifeline` command
 src-tauri         desktop shell: async commands over the engine
 src               React and TypeScript interface (map, plan, timeline, airdrop lab)
 ml                flood segmentation: data, training, evaluation, export
-docs              physics derivation, screenshots
+docs              physics derivation, brand, screenshots
 ```
 
 </details>
@@ -361,11 +367,12 @@ Lifeline is a planning aid, not certified mission software. Its outputs are
 estimates, to be checked by people who know the ground.
 
 - Optical imagery cannot see through cloud. Under monsoon cloud a flood can
-  go undetected for days; the app reports the share it could not assess. A
-  radar (Sentinel-1) detector would close that gap and fits the same
-  interface.
-- The satellite layer shows the latest clear images, not the images as of
-  the flood-check date.
+  go undetected for days; the app reports the share it could not assess.
+  Sentinel-1 radar scenes are available in the explorer engine for cloud and
+  night cover; a dedicated radar flood detector is not wired into the plan
+  flood check yet.
+- Area Intel, Supply and the AI assistant are implemented behind the scenes
+  but not yet openable as workspaces in the app.
 - Exposure rates for observed areas are the planner's judgement, not
   measurements, and the plan is only as good as those inputs.
 - OpenStreetMap coverage varies. Missing roads make trucks look worse than
