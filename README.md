@@ -371,8 +371,9 @@ estimates, to be checked by people who know the ground.
   Sentinel-1 radar scenes are available in the explorer engine for cloud and
   night cover; a dedicated radar flood detector is not wired into the plan
   flood check yet.
-- Area Intel, Supply and the AI assistant are implemented behind the scenes
-  but not yet openable as workspaces in the app.
+- The Area intel, Supply and Assistant workspaces need a loaded Plan area
+  (and, for image reading, a rendered scene). The assistant stays off until
+  you turn it on in its settings.
 - Exposure rates for observed areas are the planner's judgement, not
   measurements, and the plan is only as good as those inputs.
 - OpenStreetMap coverage varies. Missing roads make trucks look worse than

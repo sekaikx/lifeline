@@ -1461,3 +1461,248 @@ table.data th {
   font-size: 11px;
   color: var(--muted);
 }
+
+.empty-brand {
+  display: block;
+  margin: 0 auto 12px;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.split-workspace {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.split-workspace > .setup {
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+
+.intel-main,
+.supply-main,
+.assistant-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.supply-main {
+  overflow: auto;
+}
+
+.intel-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.scene-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.scene-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.scene-row:hover,
+.scene-row[aria-pressed="true"] {
+  background: var(--surface2);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.data-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Image viewer */
+.iv {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface2);
+  touch-action: none;
+  cursor: grab;
+}
+
+.iv:active {
+  cursor: grabbing;
+}
+
+.iv-stage {
+  position: absolute;
+  transform-origin: 0 0;
+}
+
+.iv-stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+}
+
+.iv-stage svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.iv-stage svg [data-marker] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.iv-grid {
+  stroke: rgba(255, 255, 255, 0.35);
+}
+
+.iv-cell {
+  fill: rgba(255, 255, 255, 0.7);
+  font-family: var(--mono);
+}
+
+.iv-marker circle {
+  fill: var(--surface);
+  stroke: var(--text);
+}
+
+.iv-marker.critical circle {
+  stroke: var(--critical);
+}
+
+.iv-marker.good circle {
+  stroke: var(--aqua);
+}
+
+.iv-marker.accent circle {
+  stroke: var(--blue);
+}
+
+.iv-marker.warn circle {
+  stroke: var(--orange);
+}
+
+.iv-marker text {
+  fill: var(--text);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.iv-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.chat-log {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-bubble {
+  max-width: 72%;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  white-space: pre-wrap;
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+}
+
+.chat-bubble p {
+  margin: 0;
+}
+
+.chat-compose {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  align-items: end;
+}
+
+.chat-input {
+  resize: vertical;
+  min-height: 44px;
+}
+
+@media (max-width: 900px) {
+  .split-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .split-workspace > .setup {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    max-height: 40vh;
+  }
+}
