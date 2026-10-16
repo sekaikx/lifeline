@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" role="img" aria-label="Lifeline">
+  <!-- Lifeline symbol: a medical cross with a lifeline running through it.
+       Transparent, with the gap around the line cut out; for dark grounds. -->
+  <defs>
+    <linearGradient id="ll-cross" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f7fd"/>
+      <stop offset="1" stop-color="#e0e3ee"/>
+    </linearGradient>
+    <linearGradient id="ll-band" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d55d6"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#5aa8ff"/>
+    </linearGradient>
+    <clipPath id="ll-plus">
+      <rect x="133" y="22" width="157" height="380" rx="36"/>
+      <rect x="25" y="136" width="370" height="170" rx="36"/>
+    </clipPath>
+    <mask id="ll-gap" maskUnits="userSpaceOnUse" x="-20" y="-20" width="460" height="460">
+      <rect x="-20" y="-20" width="460" height="460" fill="#fff"/>
+      <path d="M98 255 C160 247 172 121 300 118 L300 140 C195 140 182 255 120 255 Z" fill="#000"/>
+      <path d="M300 208 C245 208 228 306 150 306 L128 306 L128 323 L140 323 C252 323 262 214 306 210 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <g clip-path="url(#ll-plus)">
+      <g mask="url(#ll-gap)">
+        <rect x="133" y="22" width="157" height="380" rx="36" fill="url(#ll-cross)"/>
+        <rect x="25" y="136" width="370" height="170" rx="36" fill="url(#ll-cross)"/>
+      </g>
+      <path d="M-10 255 H120 C182 255 195 137 300 137 H430 V208 H300 C245 208 228 306 150 306 H-10 Z" fill="url(#ll-band)"/>
+    </g>
+</svg>

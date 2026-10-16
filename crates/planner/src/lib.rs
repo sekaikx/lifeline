@@ -18,6 +18,7 @@
 //!    meets the tolerance, the safest. This list-scheduling heuristic is
 //!    simple to explain and audit; it is not a global optimum.
 
+pub mod export;
 pub mod model;
 
 pub use model::*;
@@ -587,6 +588,18 @@ pub fn plan_with_layers(
                         Mode::Drone => ev.drone(r),
                         Mode::Airdrop => ev.airdrop(r),
                     };
+                    // a cold chain or perishable load caps the time in transit
+                    if let Some(limit) = r.max_transit_h {
+                        if o.feasible && o.one_way_h > limit {
+                            return ModeOption::infeasible(
+                                m,
+                                format!(
+                                    "{:.1} h in transit, the cargo allows at most {:.1} h",
+                                    o.one_way_h, limit
+                                ),
+                            );
+                        }
+                    }
                     // a tiny capacity would otherwise schedule millions of trips
                     if o.trips > MAX_TRIPS {
                         return ModeOption::infeasible(

@@ -2093,6 +2093,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lifeline-ai"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dirs 6.0.0",
+ "png 0.18.1",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lifeline-airdrop"
 version = "0.1.0"
 dependencies = [
@@ -2106,9 +2118,11 @@ dependencies = [
 name = "lifeline-app"
 version = "0.1.0"
 dependencies = [
+ "lifeline-ai",
  "lifeline-airdrop",
  "lifeline-geodata",
  "lifeline-planner",
+ "lifeline-supply",
  "serde",
  "serde_json",
  "tauri",
@@ -2121,10 +2135,12 @@ name = "lifeline-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "lifeline-ai",
  "lifeline-airdrop",
  "lifeline-core",
  "lifeline-geodata",
  "lifeline-planner",
+ "lifeline-supply",
  "serde",
  "serde_json",
 ]
@@ -2184,6 +2200,17 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "lifeline-supply"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "lifeline-planner",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

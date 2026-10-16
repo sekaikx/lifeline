@@ -213,6 +213,21 @@ pub struct Request {
     pub due_h: f64,
     #[serde(default)]
     pub mode: ModeChoice,
+    /// What is asked for, by catalogue item (see `lifeline-supply`). When
+    /// present the UI keeps `demand_kg` equal to the lines' total weight.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<RequestLine>,
+    /// Longest the cargo may be in transit [h], e.g. for a cold chain.
+    /// Modes slower than this are not used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_transit_h: Option<f64>,
+}
+
+/// A quantity of one catalogue item in a request.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RequestLine {
+    pub item: String,
+    pub quantity: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -374,6 +389,12 @@ impl PlanScenario {
             if !(r.demand_kg > 0.0) || !(r.due_h > 0.0) {
                 return Err(format!("{}: demand and deadline must be positive", r.name));
             }
+            if r.max_transit_h.is_some_and(|h| !(h > 0.0)) {
+                return Err(format!("{}: the transit limit must be positive", r.name));
+            }
+            if r.items.iter().any(|l| !(l.quantity > 0.0)) {
+                return Err(format!("{}: item quantities must be positive", r.name));
+            }
             if !on_map(r.x, r.y) {
                 return Err(format!("{}: outside the map", r.name));
             }
@@ -460,6 +481,8 @@ impl PlanScenario {
                     priority,
                     due_h: due,
                     mode: ModeChoice::Auto,
+                    items: Vec::new(),
+                    max_transit_h: None,
                 }
             })
             .collect();
@@ -493,6 +516,8 @@ impl PlanScenario {
             priority: Priority::High,
             due_h: 4.0,
             mode: ModeChoice::Auto,
+            items: Vec::new(),
+            max_transit_h: None,
         });
         let off_road = |p: &Place| {
             world
@@ -524,6 +549,8 @@ impl PlanScenario {
             priority: Priority::Critical,
             due_h: 1.5,
             mode: ModeChoice::Auto,
+            items: Vec::new(),
+            max_transit_h: None,
         });
 
         // Risk sites on high ground overlooking paved roads, spread out from

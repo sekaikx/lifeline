@@ -14,6 +14,8 @@ lifeline-airdrop.workspace = true
 lifeline-planner.workspace = true
 lifeline-geodata.workspace = true
 lifeline-core.workspace = true
+lifeline-ai.workspace = true
+lifeline-supply.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap = { version = "4.6", features = ["derive"] }

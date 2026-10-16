@@ -16,6 +16,8 @@ tauri-build = { version = "2", features = [] }
 lifeline-airdrop.workspace = true
 lifeline-planner.workspace = true
 lifeline-geodata.workspace = true
+lifeline-ai.workspace = true
+lifeline-supply.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }

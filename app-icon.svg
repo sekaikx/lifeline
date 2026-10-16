@@ -1,15 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="224" fill="#12233a"/>
-  <path d="M232 470 C232 300 368 196 512 196 C656 196 792 300 792 470 C744 432 688 432 652 470 C616 432 552 432 512 470 C472 432 408 432 372 470 C336 432 280 432 232 470 Z" fill="#3987e5"/>
-  <path d="M372 470 C408 432 472 432 512 470 C552 432 616 432 652 470" fill="none" stroke="#12233a" stroke-width="10"/>
-  <g stroke="#cde2fb" stroke-width="12" stroke-linecap="round">
-    <line x1="240" y1="474" x2="452" y2="676"/>
-    <line x1="784" y1="474" x2="572" y2="676"/>
-    <line x1="372" y1="472" x2="472" y2="676"/>
-    <line x1="652" y1="472" x2="552" y2="676"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Lifeline">
+  <!-- App icon: the Lifeline symbol on a near-black rounded tile -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141722"/>
+      <stop offset="1" stop-color="#07070b"/>
+    </linearGradient>
+    <linearGradient id="cross" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f7fd"/>
+      <stop offset="1" stop-color="#e0e3ee"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d55d6"/>
+      <stop offset="0.5" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#5aa8ff"/>
+    </linearGradient>
+    <clipPath id="plus">
+      <rect x="133" y="22" width="157" height="380" rx="36"/>
+      <rect x="25" y="136" width="370" height="170" rx="36"/>
+    </clipPath>
+    <mask id="gap" maskUnits="userSpaceOnUse" x="-20" y="-20" width="460" height="460">
+      <rect x="-20" y="-20" width="460" height="460" fill="#fff"/>
+      <path d="M98 255 C160 247 172 121 300 118 L300 140 C195 140 182 255 120 255 Z" fill="#000"/>
+      <path d="M300 208 C245 208 228 306 150 306 L128 306 L128 323 L140 323 C252 323 262 214 306 210 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#tile)"/>
+  <rect x="64.5" y="64.5" width="895" height="895" rx="199.5" fill="none" stroke="#fff" stroke-opacity="0.07"/>
+  <g transform="translate(512 512) scale(1.72) translate(-210 -212)">
+    <g clip-path="url(#plus)">
+      <g mask="url(#gap)">
+        <rect x="133" y="22" width="157" height="380" rx="36" fill="url(#cross)"/>
+        <rect x="25" y="136" width="370" height="170" rx="36" fill="url(#cross)"/>
+      </g>
+      <path d="M-10 255 H120 C182 255 195 137 300 137 H430 V208 H300 C245 208 228 306 150 306 H-10 Z" fill="url(#band)"/>
+    </g>
   </g>
-  <rect x="436" y="676" width="152" height="128" rx="14" fill="#eb6834"/>
-  <path d="M436 724 H588 M512 676 V804" stroke="#12233a" stroke-width="10"/>
-  <circle cx="512" cy="884" r="22" fill="none" stroke="#1baf7a" stroke-width="10"/>
-  <circle cx="512" cy="884" r="52" fill="none" stroke="#1baf7a" stroke-width="8" opacity="0.6"/>
 </svg>

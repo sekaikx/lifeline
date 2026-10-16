@@ -13,12 +13,15 @@ use lifeline_geodata::{
     WaterDetection, WaterModel, WindForecast, WindProvider,
 };
 use lifeline_planner::{LayerCache, Plan, PlanResult, PlanScenario, RiskLayers, World, WorldSpec};
+use lifeline_supply::{Allocation, ImportReport, Inventory, Item, Location, Snapshot, Tx, TxDraft};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
 struct Data {
     world: Mutex<Option<Arc<World>>>,
+    /// The stock store, loaded on first use
+    supply: Mutex<Option<Inventory>>,
     water_model: Mutex<Option<Arc<WaterModel>>>,
     layers: LayerCache,
     fetcher: Fetcher,
@@ -31,6 +34,7 @@ impl Data {
             .expect("HTTP client");
         Self {
             world: Mutex::new(None),
+            supply: Mutex::new(None),
             water_model: Mutex::new(None),
             layers: LayerCache::default(),
             fetcher,
@@ -46,6 +50,28 @@ impl Data {
         let m = Arc::new(WaterModel::load(&path)?);
         *slot = Some(Arc::clone(&m));
         Ok(m)
+    }
+
+    /// Run `f` on the stock store; with `save`, write it back if `f` succeeds.
+    fn supply<T>(
+        &self,
+        save: bool,
+        f: impl FnOnce(&mut Inventory) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let path = Inventory::default_path().ok_or("no data directory on this system")?;
+        let mut slot = self.supply.lock().map_err(|e| e.to_string())?;
+        if slot.is_none() {
+            *slot = Some(Inventory::load(&path)?);
+        }
+        let inv = slot.as_mut().expect("loaded above");
+        // work on a copy so a failed or unsaved change leaves the store intact
+        let mut next = inv.clone();
+        let out = f(&mut next)?;
+        if save {
+            next.save(&path)?;
+            *inv = next;
+        }
+        Ok(out)
     }
 
     fn world(&self, spec: &WorldSpec) -> Result<Arc<World>, String> {
@@ -331,8 +357,11 @@ async fn save_text(
     extension: String,
     contents: String,
 ) -> Result<Option<String>, String> {
-    if !matches!(extension.as_str(), "json" | "csv") {
-        return Err("only .json and .csv exports are supported".into());
+    if !matches!(
+        extension.as_str(),
+        "json" | "csv" | "geojson" | "kml" | "cot" | "md" | "txt"
+    ) {
+        return Err(format!(".{extension} files cannot be saved"));
     }
     // The UI only suggests a name; keep it a bare file name so it can never
     // steer the dialog into another folder.
@@ -354,6 +383,199 @@ async fn save_text(
         std::fs::write(&path, contents).map_err(|e| e.to_string())?;
         Ok(Some(path.display().to_string()))
     })
+    .await
+}
+
+// ------------------------------------------------------------------ assistant
+
+#[tauri::command]
+fn ai_presets() -> Vec<lifeline_ai::Preset> {
+    lifeline_ai::presets()
+}
+
+#[tauri::command]
+fn ai_settings() -> lifeline_ai::PublicSettings {
+    lifeline_ai::AiSettings::load().public()
+}
+
+#[tauri::command]
+fn ai_save_settings(
+    settings: lifeline_ai::PublicSettings,
+) -> Result<lifeline_ai::PublicSettings, String> {
+    let next = lifeline_ai::AiSettings::load().merge(settings)?;
+    next.save()?;
+    Ok(next.public())
+}
+
+#[tauri::command]
+async fn ai_models(provider: String) -> Result<Vec<lifeline_ai::ModelInfo>, String> {
+    compute(move || {
+        let s = lifeline_ai::AiSettings::load();
+        let p = s
+            .providers
+            .iter()
+            .find(|p| p.id == provider)
+            .ok_or_else(|| format!("no provider {provider}"))?;
+        lifeline_ai::list_models(p)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn ai_chat(
+    context: String,
+    messages: Vec<lifeline_ai::Message>,
+) -> Result<lifeline_ai::Completion, String> {
+    compute(move || lifeline_ai::chat(&lifeline_ai::AiSettings::load(), &context, &messages)).await
+}
+
+#[tauri::command]
+async fn ai_parse_request(
+    text: String,
+    places: Vec<lifeline_ai::PlaceRef>,
+    catalogue: Vec<lifeline_ai::CatalogueRef>,
+) -> Result<lifeline_ai::ParsedRequest, String> {
+    compute(move || {
+        lifeline_ai::parse_request(&lifeline_ai::AiSettings::load(), &text, &places, &catalogue)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn ai_assess_area(
+    png: String,
+    bounds: [f64; 4],
+    context: String,
+) -> Result<lifeline_ai::AreaAssessment, String> {
+    compute(move || {
+        lifeline_ai::assess_area(&lifeline_ai::AiSettings::load(), &png, bounds, &context)
+    })
+    .await
+}
+
+// ------------------------------------------------------------------ supply
+
+#[tauri::command]
+async fn supply_snapshot(data: Shared<'_>, today: String) -> Result<Snapshot, String> {
+    blocking(&data, move |d| {
+        d.supply(false, |inv| Ok(inv.snapshot(&today)))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn supply_apply(data: Shared<'_>, draft: TxDraft) -> Result<Tx, String> {
+    blocking(&data, move |d| d.supply(true, |inv| inv.apply(draft))).await
+}
+
+#[tauri::command]
+async fn supply_upsert_item(data: Shared<'_>, item: Item) -> Result<(), String> {
+    blocking(&data, move |d| d.supply(true, |inv| inv.upsert_item(item))).await
+}
+
+#[tauri::command]
+async fn supply_upsert_location(data: Shared<'_>, location: Location) -> Result<(), String> {
+    blocking(&data, move |d| {
+        d.supply(true, |inv| inv.upsert_location(location))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn supply_import(
+    data: Shared<'_>,
+    text: String,
+    user: String,
+    location: String,
+) -> Result<ImportReport, String> {
+    blocking(&data, move |d| {
+        d.supply(true, |inv| {
+            lifeline_supply::import_stock(inv, &text, &user, &location)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+async fn supply_export(data: Shared<'_>, kind: String) -> Result<String, String> {
+    blocking(&data, move |d| {
+        d.supply(false, |inv| {
+            Ok(match kind.as_str() {
+                "ledger" => lifeline_supply::export_ledger(inv),
+                _ => lifeline_supply::export_stock(inv),
+            })
+        })
+    })
+    .await
+}
+
+/// Fill an empty store with demonstration stock.
+#[tauri::command]
+async fn supply_load_example(data: Shared<'_>, today: String) -> Result<(), String> {
+    blocking(&data, move |d| {
+        d.supply(true, |inv| {
+            if !inv.ledger.is_empty() {
+                return Err(
+                    "the stock ledger is not empty; examples load only into an empty store".into(),
+                );
+            }
+            *inv = Inventory::example(&today);
+            Ok(())
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+async fn supply_allocate(
+    data: Shared<'_>,
+    scenario: PlanScenario,
+    plan: Plan,
+    locations: Vec<String>,
+    today: String,
+) -> Result<Allocation, String> {
+    blocking(&data, move |d| {
+        d.supply(false, |inv| {
+            lifeline_supply::allocate(inv, &scenario, &plan, &locations, &today)
+        })
+    })
+    .await
+}
+
+// ------------------------------------------------------------------ exports
+
+/// The scenario and plan as GeoJSON, KML or Cursor-on-Target, saved where
+/// the user chooses.
+#[tauri::command]
+async fn export_plan(
+    app: AppHandle,
+    scenario: PlanScenario,
+    plan: Option<Plan>,
+    format: lifeline_planner::export::ExportFormat,
+) -> Result<Option<String>, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let text = lifeline_planner::export::export(&scenario, plan.as_ref(), format, now)?;
+    let ext = lifeline_planner::export::file_extension(format).to_string();
+    let base: String = scenario
+        .name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    save_text(
+        app,
+        format!("{}-plan.{ext}", base.trim_matches('-')),
+        ext,
+        text,
+    )
     .await
 }
 
@@ -382,6 +604,22 @@ pub fn run() {
             atmosphere_profile,
             open_text,
             save_text,
+            ai_presets,
+            ai_settings,
+            ai_save_settings,
+            ai_models,
+            ai_chat,
+            ai_parse_request,
+            ai_assess_area,
+            supply_snapshot,
+            supply_apply,
+            supply_upsert_item,
+            supply_upsert_location,
+            supply_import,
+            supply_export,
+            supply_load_example,
+            supply_allocate,
+            export_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Lifeline");

@@ -13,6 +13,7 @@ lifeline-ground.workspace = true
 lifeline-drone.workspace = true
 lifeline-geodata.workspace = true
 rayon.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

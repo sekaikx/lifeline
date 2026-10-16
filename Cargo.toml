@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/geodata", "crates/planner", "crates/cli", "src-tauri"]
-default-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/geodata", "crates/planner", "crates/cli"]
+members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/geodata", "crates/planner", "crates/ai", "crates/supply", "crates/cli", "src-tauri"]
+default-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/geodata", "crates/planner", "crates/ai", "crates/supply", "crates/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -17,6 +17,8 @@ lifeline-ground = { path = "crates/ground" }
 lifeline-drone = { path = "crates/drone" }
 lifeline-geodata = { path = "crates/geodata" }
 lifeline-planner = { path = "crates/planner" }
+lifeline-ai = { path = "crates/ai" }
+lifeline-supply = { path = "crates/supply" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 rayon = "1.12"

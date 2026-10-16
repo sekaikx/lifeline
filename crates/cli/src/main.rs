@@ -382,6 +382,8 @@ fn rpc() -> Result<serde_json::Value, String> {
             num("zMax", 11_000.0),
             num("rows", 111.0) as usize,
         ))),
+        cmd if cmd.starts_with("ai_") => ai_rpc(cmd, &req.args),
+        cmd if cmd.starts_with("supply_") => supply_rpc(cmd, &req.args),
         other => Err(format!("unknown command {other}")),
     }
 }
@@ -491,6 +493,112 @@ fn run(cli: Cli) -> Result<(), String> {
             Ok(())
         }
     }
+}
+
+fn parse<T: serde::de::DeserializeOwned>(v: &serde_json::Value, key: &str) -> Result<T, String> {
+    serde_json::from_value(v[key].clone()).map_err(|e| format!("{key}: {e}"))
+}
+
+fn to_json<T: Serialize>(v: T) -> Result<serde_json::Value, String> {
+    serde_json::to_value(v).map_err(|e| e.to_string())
+}
+
+/// The assistant, with settings from the user's config directory.
+fn ai_rpc(cmd: &str, a: &serde_json::Value) -> Result<serde_json::Value, String> {
+    use lifeline_ai as ai;
+    let settings = ai::AiSettings::load();
+    match cmd {
+        "ai_presets" => to_json(ai::presets()),
+        "ai_settings" => to_json(settings.public()),
+        "ai_save_settings" => {
+            let next = settings.merge(parse(a, "settings")?)?;
+            next.save()?;
+            to_json(next.public())
+        }
+        "ai_models" => {
+            let id: String = parse(a, "provider")?;
+            let p = settings
+                .providers
+                .iter()
+                .find(|p| p.id == id)
+                .ok_or_else(|| format!("no provider {id}"))?;
+            to_json(ai::list_models(p)?)
+        }
+        "ai_chat" => to_json(ai::chat(
+            &settings,
+            a["context"].as_str().unwrap_or("{}"),
+            &parse::<Vec<ai::Message>>(a, "messages")?,
+        )?),
+        "ai_parse_request" => to_json(ai::parse_request(
+            &settings,
+            a["text"].as_str().unwrap_or(""),
+            &parse::<Vec<ai::PlaceRef>>(a, "places").unwrap_or_default(),
+            &parse::<Vec<ai::CatalogueRef>>(a, "catalogue").unwrap_or_default(),
+        )?),
+        "ai_assess_area" => to_json(ai::assess_area(
+            &settings,
+            a["png"].as_str().ok_or("png: missing")?,
+            parse(a, "bounds")?,
+            a["context"].as_str().unwrap_or("{}"),
+        )?),
+        other => Err(format!("unknown command {other}")),
+    }
+}
+
+/// Stock, kept in `supply.json` in the data directory (or `LIFELINE_SUPPLY`).
+fn supply_rpc(cmd: &str, a: &serde_json::Value) -> Result<serde_json::Value, String> {
+    use lifeline_supply::{self as supply, Inventory};
+    let path = Inventory::default_path().ok_or("no data directory on this system")?;
+    let mut inv = Inventory::load(&path)?;
+    let today = a["today"].as_str().unwrap_or("1970-01-01").to_string();
+    let reply = match cmd {
+        "supply_snapshot" => return to_json(inv.snapshot(&today)),
+        "supply_export" => {
+            return to_json(match a["kind"].as_str() {
+                Some("ledger") => supply::export_ledger(&inv),
+                _ => supply::export_stock(&inv),
+            })
+        }
+        "supply_weigh" => {
+            return to_json(inv.weigh(&parse::<Vec<lifeline_planner::RequestLine>>(a, "lines")?)?)
+        }
+        "supply_allocate" => {
+            return to_json(supply::allocate(
+                &inv,
+                &parse(a, "scenario")?,
+                &parse(a, "plan")?,
+                &parse::<Vec<String>>(a, "locations")?,
+                &today,
+            )?)
+        }
+        "supply_load_example" => {
+            if !inv.ledger.is_empty() {
+                return Err(
+                    "the stock ledger is not empty; examples load only into an empty store".into(),
+                );
+            }
+            inv = Inventory::example(&today);
+            serde_json::Value::Null
+        }
+        "supply_apply" => to_json(inv.apply(parse(a, "draft")?)?)?,
+        "supply_upsert_item" => {
+            inv.upsert_item(parse(a, "item")?)?;
+            serde_json::Value::Null
+        }
+        "supply_upsert_location" => {
+            inv.upsert_location(parse(a, "location")?)?;
+            serde_json::Value::Null
+        }
+        "supply_import" => to_json(supply::import_stock(
+            &mut inv,
+            a["text"].as_str().unwrap_or(""),
+            a["user"].as_str().unwrap_or(""),
+            a["location"].as_str().unwrap_or("depot"),
+        )?)?,
+        other => return Err(format!("unknown command {other}")),
+    };
+    inv.save(&path)?;
+    Ok(serde_json::json!({ "result": reply, "snapshot": inv.snapshot(&today) }))
 }
 
 fn main() -> ExitCode {
