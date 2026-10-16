@@ -21,6 +21,10 @@ pub(crate) struct Item {
     pub cloud: f64,
     /// Sentinel-2 processing baseline, e.g. 5.1 (0 when not reported)
     pub baseline: f64,
+    /// Satellite, e.g. "Sentinel-2B" or "landsat-8"
+    pub platform: String,
+    /// Radar pass direction ("ascending", "descending"), empty for optical
+    pub orbit: String,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +83,11 @@ pub(crate) fn search(
                 .as_str()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0.0),
+            platform: f.properties["platform"].as_str().unwrap_or("").to_string(),
+            orbit: f.properties["sat:orbit_state"]
+                .as_str()
+                .unwrap_or("")
+                .to_string(),
             id: f.id,
         })
         .collect())

@@ -9,11 +9,13 @@
 //! | Wind | MET Norway Locationforecast (default) or Open-Meteo | CC BY 4.0; Open-Meteo's free API is non-commercial |
 //! | Imagery, water index | Copernicus Sentinel-2 L2A via Microsoft Planetary Computer | Copernicus open data |
 //! | Permanent water | ESA WorldCover 2021 via Planetary Computer | CC BY 4.0 |
+//! | Explorer imagery | Sentinel-2, Landsat Collection 2, Sentinel-1 RTC via Planetary Computer | Copernicus open data; USGS public domain |
 //!
 //! Everything is fetched through [`Fetcher`], which caches responses on disk
 //! so an area that has been loaded once keeps working offline.
 
 mod dem;
+mod explore;
 mod fetch;
 mod frame;
 mod imagery;
@@ -24,6 +26,10 @@ mod water_model;
 mod weather;
 
 pub use dem::terrain;
+pub use explore::{
+    compare, grid_size, list_scenes, scene_day, scene_image, ChangeReport, ChangeStats, LegendStop,
+    Product, SceneImage, SceneInfo, SceneQuery, SceneStats, Sensor,
+};
 pub use fetch::Fetcher;
 pub use frame::LocalFrame;
 pub use imagery::{imagery, Imagery, Scene};

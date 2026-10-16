@@ -17,7 +17,7 @@ mod airdrop;
 
 use clap::{Parser, Subcommand};
 use lifeline_airdrop::scenario::{self as drop, Scenario as DropScenario};
-use lifeline_geodata::{Area, Fetcher, WaterModel, WindProvider};
+use lifeline_geodata::{Area, Fetcher, Product, SceneQuery, Sensor, WaterModel, WindProvider};
 use lifeline_planner::{
     plan, risk_layers, GeneratedSpec, LayerCache, Mode, PlanScenario, World, WorldSpec,
 };
@@ -306,6 +306,44 @@ fn rpc() -> Result<serde_json::Value, String> {
                 &fetcher()?,
                 &area,
                 1024,
+            )?))
+        }
+        "list_scenes" => {
+            let area: Area = serde_json::from_value(arg("area")).map_err(|e| e.to_string())?;
+            let sensor: Sensor = serde_json::from_value(arg("sensor")).unwrap_or_default();
+            json(serde_json::to_value(lifeline_geodata::list_scenes(
+                &fetcher()?,
+                &area,
+                sensor,
+                req.args["from"].as_i64().ok_or("from: Unix seconds")?,
+                req.args["to"].as_i64().ok_or("to: Unix seconds")?,
+                req.args["maxCloud"].as_f64(),
+                num("limit", 60.0) as usize,
+            )?))
+        }
+        "scene_image" => {
+            let area: Area = serde_json::from_value(arg("area")).map_err(|e| e.to_string())?;
+            let query: SceneQuery =
+                serde_json::from_value(arg("query")).map_err(|e| format!("query: {e}"))?;
+            let product: Product = serde_json::from_value(arg("product")).unwrap_or_default();
+            json(serde_json::to_value(lifeline_geodata::scene_image(
+                &fetcher()?,
+                &area,
+                &query,
+                product,
+            )?))
+        }
+        "compare_scenes" => {
+            let area: Area = serde_json::from_value(arg("area")).map_err(|e| e.to_string())?;
+            let before: SceneQuery =
+                serde_json::from_value(arg("before")).map_err(|e| format!("before: {e}"))?;
+            let after: SceneQuery =
+                serde_json::from_value(arg("after")).map_err(|e| format!("after: {e}"))?;
+            json(serde_json::to_value(lifeline_geodata::compare(
+                &fetcher()?,
+                &area,
+                &before,
+                &after,
             )?))
         }
         "water_detectors" => json(serde_json::to_value(serde_json::json!({

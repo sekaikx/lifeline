@@ -221,7 +221,10 @@ fn layer_cache_reuses_fields_and_matches_a_fresh_plan() {
     s.requests[0].x += 200.0;
     let second = cache.plan(world(), &s, Some(&first.layers_key)).unwrap();
     assert_eq!(second.layers_key, first.layers_key);
-    assert!(second.layers.is_none(), "unchanged fields are not sent again");
+    assert!(
+        second.layers.is_none(),
+        "unchanged fields are not sent again"
+    );
     let fresh = plan(world(), &s).unwrap();
     assert_eq!(second.plan.assignments, fresh.assignments);
     // a new observed area does

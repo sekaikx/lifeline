@@ -59,7 +59,7 @@ const MODEL_RESOLUTION: f64 = 20.0;
 /// Surface reflectance from an L2A digital number. Processing baseline
 /// 04.00 (January 2022) added 1000 to every value so dark pixels are not
 /// clipped; Planetary Computer serves the values unharmonised.
-fn reflectance(dn: f64, item: &Item) -> f64 {
+pub(crate) fn reflectance(dn: f64, item: &Item) -> f64 {
     let offset = if item.baseline >= 4.0 { 1000.0 } else { 0.0 };
     ((dn - offset) / 10_000.0).max(0.0)
 }
@@ -458,6 +458,8 @@ mod tests {
             datetime: String::new(),
             cloud: 0.0,
             baseline,
+            platform: String::new(),
+            orbit: String::new(),
         };
         assert!((reflectance(1500.0, &item(5.1)) - 0.05).abs() < 1e-12);
         assert!((reflectance(1500.0, &item(3.0)) - 0.15).abs() < 1e-12);

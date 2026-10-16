@@ -9,7 +9,8 @@ use lifeline_airdrop::scenario::{
     self as drop, DropReport, MonteCarloReport, NumericsReport, ProfileRow,
 };
 use lifeline_geodata::{
-    Area, Fetcher, Imagery, WaterDetection, WaterModel, WindForecast, WindProvider,
+    Area, ChangeReport, Fetcher, Imagery, Product, SceneImage, SceneInfo, SceneQuery, Sensor,
+    WaterDetection, WaterModel, WindForecast, WindProvider,
 };
 use lifeline_planner::{LayerCache, Plan, PlanResult, PlanScenario, RiskLayers, World, WorldSpec};
 use std::sync::{Arc, Mutex};
@@ -177,6 +178,60 @@ async fn imagery(data: Shared<'_>, area: Area) -> Result<Imagery, String> {
     .await
 }
 
+/// Scenes of one sensor over the area between two Unix times.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn list_scenes(
+    data: Shared<'_>,
+    area: Area,
+    sensor: Sensor,
+    from: i64,
+    to: i64,
+    max_cloud: Option<f64>,
+    limit: Option<usize>,
+) -> Result<Vec<SceneInfo>, String> {
+    blocking(&data, move |d| {
+        lifeline_geodata::list_scenes(
+            &d.fetcher,
+            &area,
+            sensor,
+            from,
+            to,
+            max_cloud,
+            limit.unwrap_or(60),
+        )
+    })
+    .await
+}
+
+/// One scene, or a mosaic up to a date, rendered as `product`.
+#[tauri::command]
+async fn scene_image(
+    data: Shared<'_>,
+    area: Area,
+    query: SceneQuery,
+    product: Product,
+) -> Result<SceneImage, String> {
+    blocking(&data, move |d| {
+        lifeline_geodata::scene_image(&d.fetcher, &area, &query, product)
+    })
+    .await
+}
+
+/// What changed between two looks at the area.
+#[tauri::command]
+async fn compare_scenes(
+    data: Shared<'_>,
+    area: Area,
+    before: SceneQuery,
+    after: SceneQuery,
+) -> Result<ChangeReport, String> {
+    blocking(&data, move |d| {
+        lifeline_geodata::compare(&d.fetcher, &area, &before, &after)
+    })
+    .await
+}
+
 /// Which water detectors can run: the index always, the learned model when
 /// a model file is installed.
 #[derive(serde::Serialize)]
@@ -315,6 +370,9 @@ pub fn run() {
             risk_layers,
             wind_forecast,
             imagery,
+            list_scenes,
+            scene_image,
+            compare_scenes,
             water_detectors,
             detect_flooding,
             default_scenario,
