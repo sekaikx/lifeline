@@ -4,7 +4,7 @@ members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "cr
 default-members = ["crates/core", "crates/airdrop", "crates/ground", "crates/drone", "crates/geodata", "crates/planner", "crates/ai", "crates/supply", "crates/cli"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/sekaikx/lifeline"

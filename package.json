@@ -1,7 +1,7 @@
 {
   "name": "lifeline",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Desktop resupply planner: truck, drone and airdrop options on real terrain, OpenStreetMap roads, weather and Sentinel-2 flood detection",
   "keywords": [
     "humanitarian-logistics",

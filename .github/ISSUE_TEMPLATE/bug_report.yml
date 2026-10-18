@@ -28,7 +28,7 @@ body:
     id: version
     attributes:
       label: Lifeline version
-      placeholder: "0.2.0, or the commit if built from source"
+      placeholder: "0.3.0, or the commit if built from source"
     validations:
       required: true
   - type: dropdown

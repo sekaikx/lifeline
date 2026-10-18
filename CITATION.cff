@@ -6,8 +6,8 @@ authors:
   - alias: sekaikx
 repository-code: "https://github.com/sekaikx/lifeline"
 license: MIT
-version: 0.1.0
-date-released: 2026-10-15
+version: 0.3.0
+date-released: 2026-10-18
 abstract: >-
   Lifeline is a desktop planner for humanitarian and contested resupply. For
   each delivery it compares a truck on the OpenStreetMap road network, a

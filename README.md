@@ -1,14 +1,14 @@
-<picture>
+﻿<picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/brand/banner-dark.svg">
   <img alt="Lifeline: resupply planning by truck, drone and airdrop" src="docs/brand/banner-light.svg" width="100%">
 </picture>
 
 <p align="center">
-  <a href="#download">Download</a> ·
-  <a href="#quick-start">Quick start</a> ·
-  <a href="#recognising-floods-from-satellite-images">Flood recognition</a> ·
-  <a href="docs/physics.md">Physics</a> ·
-  <a href="ml/README.md">Model training</a> ·
+  <a href="#download">Download</a> Â·
+  <a href="#quick-start">Quick start</a> Â·
+  <a href="#recognising-floods-from-satellite-images">Flood recognition</a> Â·
+  <a href="docs/physics.md">Physics</a> Â·
+  <a href="ml/README.md">Model training</a> Â·
   <a href="#building-from-source">Build</a>
 </p>
 
@@ -41,7 +41,7 @@ working offline once an area has been loaded.
 
 | Supply: lots, ledger and FEFO allocation | Area intel: any date, three missions |
 | --- | --- |
-| ![Supply workspace with stock lots and allocation](docs/img/supply.png) | ![Area intel workspace with a Sentinel-2 scene and A1–H8 grid](docs/img/area-intel.png) |
+| ![Supply workspace with stock lots and allocation](docs/img/supply.png) | ![Area intel workspace with a Sentinel-2 scene and A1â€“H8 grid](docs/img/area-intel.png) |
 
 ## Download
 
@@ -51,12 +51,12 @@ free and has no account, telemetry or licence key.
 
 | System | File | Notes |
 | --- | --- | --- |
-| Windows 10 and 11, 64-bit | [`Lifeline_0.2.0_x64-setup.exe`](https://github.com/sekaikx/lifeline/releases/latest) | Installer, the usual choice |
-| | [`Lifeline_0.2.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
-| macOS, Apple silicon and Intel | [`Lifeline_0.2.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
-| Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.2.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
-| Fedora, RHEL, openSUSE | [`Lifeline-0.2.0-1.x86_64.rpm`](https://github.com/sekaikx/lifeline/releases/latest) | RPM package; install with dnf or zypper |
-| Other Linux, x86-64 | [`Lifeline_0.2.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
+| Windows 10 and 11, 64-bit | [`Lifeline_0.3.0_x64-setup.exe`](https://github.com/sekaikx/lifeline/releases/latest) | Installer, the usual choice |
+| | [`Lifeline_0.3.0_x64_en-US.msi`](https://github.com/sekaikx/lifeline/releases/latest) | MSI package, for managed deployment |
+| macOS, Apple silicon and Intel | [`Lifeline_0.3.0_universal.dmg`](https://github.com/sekaikx/lifeline/releases/latest) | Disk image; drag Lifeline to Applications |
+| Debian 12+, Ubuntu 22.04+ | [`Lifeline_0.3.0_amd64.deb`](https://github.com/sekaikx/lifeline/releases/latest) | Debian package; install with apt |
+| Fedora, RHEL, openSUSE | [`Lifeline-0.3.0-1.x86_64.rpm`](https://github.com/sekaikx/lifeline/releases/latest) | RPM package; install with dnf or zypper |
+| Other Linux, x86-64 | [`Lifeline_0.3.0_amd64.AppImage`](https://github.com/sekaikx/lifeline/releases/latest) | Make it executable (`chmod +x`), then run it |
 
 The installers are not code-signed yet, so Windows and macOS warn the first
 time you open Lifeline.
@@ -114,7 +114,7 @@ What to try in the first five minutes.
    added as an impassable area and the plan is recomputed around it. The
    *Staging* list shows which requests lost truck access. Repeat with
    5 September 2021 to see the same ground a year before the flood.
-5. Open *Supply* and *Load example* for lot-tracked stock (classes I–X,
+5. Open *Supply* and *Load example* for lot-tracked stock (classes Iâ€“X,
    ledger, FEFO picks against the plan). Open *Area intel* for Sentinel-2,
    Landsat or radar on any date. *Assistant* stays off until you turn it on
    in its settings.
@@ -223,7 +223,7 @@ at, the U-Net scores 0.846 and 0.793.
 On the 2022 Indus flood, both detectors find the event and stay quiet a year
 earlier:
 
-| Dadu, Pakistan, 40 × 40 km | Water index | U-Net |
+| Dadu, Pakistan, 40 Ã— 40 km | Water index | U-Net |
 | --- | ---: | ---: |
 | 5 September 2022, new water | 46.6 % | 42.0 % |
 | 5 September 2021, new water | 2.3 % | 0.0 % |
@@ -267,7 +267,7 @@ is shown on the map.
 
 | | Model |
 | --- | --- |
-| Exposure | Each observed area has a detection rate λ over the cells it can see (line of sight over the terrain, within range). The chance of passing a route unharmed is exp(−∫λ dt) along it. |
+| Exposure | Each observed area has a detection rate Î» over the cells it can see (line of sight over the terrain, within range). The chance of passing a route unharmed is exp(âˆ’âˆ«Î» dt) along it. |
 | Trucks | Shortest paths over the OpenStreetMap graph, weighted by time plus exposure. Sweeping the weight on exposure gives a Pareto set of routes. Speed depends on road class and grade. |
 | Drones | Hover and cruise power from momentum theory, an energy budget with reserve, ground speed from the wind triangle, A* over the exposure field, and radio line of sight to the depot along the path. |
 | Airdrops | Point mass with quadratic drag through the International Standard Atmosphere and the forecast wind profile, parachute inflation, RK4 integration, release point by root finding, landing spread by a parallel Monte Carlo. The derivation is in [docs/physics.md](docs/physics.md). |
@@ -285,12 +285,12 @@ assumptions.
 
 `cargo test` runs 76 tests. Among them:
 
-- RK4 beats Euler at every equal step size by more than 100×, and the
+- RK4 beats Euler at every equal step size by more than 100Ã—, and the
   observed orders of accuracy are 1 and 4 against an exact drag solution.
 - The release solver lands within 1 cm of the target, also over a hill with
   position-dependent wind. An unstable step size is reported as an error,
   never as a confident wrong answer.
-- The 95 % landing ellipse holds 95 ± 3 % of Monte Carlo samples.
+- The 95 % landing ellipse holds 95 Â± 3 % of Monte Carlo samples.
 - Line of sight, viewsheds and hazard masks; routing on generated and
   recorded OpenStreetMap networks; the scheduler's mode choices.
 - Parsers for recorded Overpass and MET Norway responses, so the data path
@@ -353,7 +353,7 @@ npm run tauri dev        # desktop app with hot reload
 npm run tauri build      # installer for your OS
 ```
 
-Pushing a tag such as `v0.2.0` builds the Windows, macOS and Linux
+Pushing a tag such as `v0.3.0` builds the Windows, macOS and Linux
 installers in GitHub Actions and attaches them to a release. Checks, tests
 and style notes for contributors are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
