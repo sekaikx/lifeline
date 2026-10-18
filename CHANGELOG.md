@@ -4,6 +4,39 @@ Notable changes to Lifeline. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Place search in *Plan*: find any spot by name through OpenStreetMap
+  Nominatim, cached for a day.
+- Tactical 1 km graticule on the map (heavy lines every 5 km with kilometre
+  labels) behind a new *Ops grid* toggle.
+- Map markers — depot, requests and observed areas — are keyboard accessible:
+  focus with Tab, move with the arrow keys (Shift for coarse steps), Enter
+  opens a request.
+- Hypsometric elevation legend on the map key, matching the terrain tint.
+- Assistant provider presets for DeepSeek, Cerebras, xAI, GitHub Models and
+  NVIDIA NIM.
+- Satellite base layer reports a failure to load instead of silently falling
+  back to relief.
+
+### Changed
+
+- Terrain relief re-coloured with a full hypsometric ramp (forest floor to
+  ridgeline per theme) and a two-light hillshade so lee slopes stay readable.
+
+### Fixed
+
+- Rapid area loads or flood checks could interleave and apply an older result
+  over a newer one; both now guard against out-of-order completion.
+- Satellite tile decoding moved off the render path; a corrupt or missing
+  image no longer lingers.
+- Duplicate exports launched parallel processes when pressed repeatedly;
+  exports honour the busy state.
+- Map label cache no longer grows without bound over a long session.
+- Backend error objects stringify into readable text instead of `{}`.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

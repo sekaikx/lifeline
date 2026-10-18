@@ -1,10 +1,11 @@
 import { LayerTable } from "../airdrop/ScenarioPanel";
 import type { Wind } from "../airdrop/types";
 import { NumberField, NumberInput, Section, SelectField } from "../components/Field";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/api";
 import { fmtPct } from "../lib/format";
 import type { Placing } from "./MapView";
-import type { Area, PlanScenario, WaterDetector, WindProvider } from "./types";
+import type { Area, PlaceCandidate, PlanScenario, WaterDetector, WindProvider } from "./types";
 
 type Update = (fn: (s: PlanScenario) => PlanScenario) => void;
 
@@ -288,12 +289,13 @@ function AreaSection({ scenario: s, actions }: { scenario: PlanScenario; actions
         label="Load"
         value={preset}
         options={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
-        onChange={(id) => {
-          setPreset(id);
-          const a = PRESETS.find((p) => p.id === id)?.area;
-          if (a) setDraft(a);
-        }}
-      />
+          onChange={(id) => {
+            setPreset(id);
+            const a = PRESETS.find((p) => p.id === id)?.area;
+            if (a) setDraft(a);
+          }}
+        />
+      <PlaceSearch setDraft={setDraft} setPreset={setPreset} />
       {preset === "custom" && (
         <>
           <label className="field">
@@ -398,3 +400,115 @@ export const floodSummary = (
   detector: WaterDetector = "index",
 ) =>
   `New water on ${fmtPct(newFrac, 1)} of the area; ${fmtPct(obscured)} could not be assessed (cloud, shadow, snow). Sentinel-2 ${[...new Set(scenes.map((x) => x.date))].join(", ")}, ${detector === "model" ? "trained U-Net" : "water index"}.`;
+
+function PlaceSearch({
+  setDraft,
+  setPreset,
+}: {
+  setDraft: (a: Area) => void;
+  setPreset: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PlaceCandidate[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [fail, setFail] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const timer = useRef(0);
+  const seq = useRef(0);
+
+  useEffect(() => {
+    return () => window.clearTimeout(timer.current);
+  }, []);
+
+  const search = (q: string) => {
+    setFail(false);
+    if (!q.trim()) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const id = ++seq.current;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(async () => {
+      try {
+        const found = await api.geocode(q.trim());
+        if (id !== seq.current) return;
+        setResults(found);
+        setHighlight(0);
+      } catch {
+        if (id !== seq.current) return;
+        setResults([]);
+        setFail(true);
+      } finally {
+        if (id === seq.current) setSearching(false);
+      }
+    }, 250);
+  };
+
+  const pick = (c: PlaceCandidate) => {
+    setQuery(c.display_name);
+    setResults([]);
+    setDraft({
+      name: c.name,
+      lat: c.lat,
+      lon: c.lon,
+      size_m: 30_000,
+      cell_m: 100,
+    });
+    setPreset("custom");
+  };
+
+  return (
+    <Section title="Find a place">
+      <label className="field">
+        <span>Search</span>
+        <input
+          className="text-input"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            search(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (results.length === 0) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHighlight((h) => Math.min(h + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHighlight((h) => Math.max(h - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              const c = results[Math.min(highlight, results.length - 1)];
+              if (c) pick(c);
+            } else if (e.key === "Escape") {
+              setResults([]);
+            }
+          }}
+          placeholder="e.g. Kathmandu, Nepal"
+        />
+      </label>
+      {searching && <span className="muted">Searching…</span>}
+      {fail && <span className="muted">Search failed — check the connection.</span>}
+      {results.length > 0 && (
+        <div className="place-results">
+          {results.map((c, i) => (
+            <button
+              key={`${c.lat},${c.lon}`}
+              type="button"
+              className={`place-result${i === highlight ? " active" : ""}`}
+              onMouseEnter={() => setHighlight(i)}
+              onClick={() => pick(c)}
+            >
+              <strong>{c.name}</strong>
+              <span className="muted"> · {c.type}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="note">
+        Place names come from OpenStreetMap (Nominatim). Pick a result, then choose <strong>Load area and example plan</strong> to download that spot's terrain and roads.
+      </p>
+    </Section>
+  );
+}

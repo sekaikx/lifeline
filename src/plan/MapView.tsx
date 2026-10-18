@@ -23,6 +23,8 @@ interface Props {
   placing: Placing;
   onPlace: (x: number, y: number) => void;
   onMove: (kind: DragKind, id: string, x: number, y: number) => void;
+  /** Draw the 1 km tactical graticule over the map */
+  grid: boolean;
   baseLayer: BaseLayer;
   imagery: Pick<Imagery, "png_base64" | "bounds" | "attribution"> | null;
   /** Height of the map key overlay, kept clear of labels [px] */
@@ -73,7 +75,7 @@ export const modeColor = (p: Palette, m: Mode | null) =>
   m === "truck" ? p.blue : m === "drone" ? p.orange : m === "airdrop" ? p.aqua : p.muted;
 
 export function MapView(props: Props) {
-  const { world, scenario, plan, layers, palette, theme, selected, riskLayer, placing, baseLayer, imagery } = props;
+  const { world, scenario, plan, layers, palette, theme, selected, riskLayer, placing, baseLayer, imagery, grid } = props;
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -151,13 +153,22 @@ export function MapView(props: Props) {
     return { img: renderRisk(layers[riskLayer], palette.critical), r: layers[riskLayer] };
   }, [layers, riskLayer, palette]);
 
-  const [imgReady, setImgReady] = useState(0);
-  const satellite = useMemo(() => {
-    if (!imagery) return null;
+  // satellite tile: decoded outside the draw path so a slow or corrupt PNG
+  // never stalls rendering; failures surface instead of silently falling back
+  const [sat, setSat] = useState<{ img: HTMLImageElement } | null>(null);
+  const [satFailed, setSatFailed] = useState(false);
+  useEffect(() => {
+    setSat(null);
+    setSatFailed(false);
+    if (!imagery) return;
     const img = new Image();
-    img.onload = () => setImgReady((n) => n + 1);
+    img.onload = () => (img.naturalWidth > 0 ? setSat({ img }) : setSatFailed(true));
+    img.onerror = () => setSatFailed(true);
     img.src = `data:image/png;base64,${imagery.png_base64}`;
-    return img;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
   }, [imagery]);
   const masks = useMemo(() => scenario.risk.masks.map((m) => ({ m, img: renderMask(m, palette.critical) })), [scenario.risk.masks, palette]);
 
@@ -174,9 +185,9 @@ export function MapView(props: Props) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     // naturalWidth is 0 for an image that failed to decode; drawing it would throw
-    if (baseLayer === "satellite" && satellite?.complete && satellite.naturalWidth > 0 && imagery) {
+    if (baseLayer === "satellite" && sat && imagery) {
       const [w, sBound, e, n] = imagery.bounds;
-      ctx.drawImage(satellite, sx(w), sy(n), (e - w) / v.mpp, (n - sBound) / v.mpp);
+      ctx.drawImage(sat.img, sx(w), sy(n), (e - w) / v.mpp, (n - sBound) / v.mpp);
     } else {
       ctx.drawImage(relief, sx(bx0), sy(by1), (bx1 - bx0) / v.mpp, (by1 - by0) / v.mpp);
     }
@@ -227,7 +238,7 @@ export function MapView(props: Props) {
     }
     ctx.fill();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relief, roadPaths, risk, masks, satellite, imgReady, baseLayer, world, v.cx, v.cy, v.mpp, size, palette]);
+  }, [relief, roadPaths, risk, masks, sat, baseLayer, world, v.cx, v.cy, v.mpp, size, palette]);
 
   // ------------------------------------------------------------ interaction
   const pointerWorld = (ev: React.PointerEvent | React.WheelEvent) => {
@@ -309,6 +320,23 @@ export function MapView(props: Props) {
 
   const posOf = (kind: DragKind, id: string, x: number, y: number): Point =>
     drag && drag.kind === kind && drag.id === id ? [drag.x, drag.y] : [x, y];
+
+  // keyboard: arrows nudge a focused marker, Enter selects a request
+  const markerKeys = (kind: DragKind, id: string, x: number, y: number, select?: () => void) =>
+    (ev: React.KeyboardEvent) => {
+      const step = ev.shiftKey ? 250 : 25;
+      const delta: Partial<Record<string, [number, number]>> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+      const d = delta[ev.key];
+      if (d) {
+        ev.preventDefault();
+        props.onMove(kind, id, x + d[0], y + d[1]);
+      } else if ((ev.key === "Enter" || ev.key === " ") && select) {
+        ev.preventDefault();
+        select();
+      } else if (ev.key === "Escape") {
+        (ev.target as HTMLElement).blur();
+      }
+    };
 
   // ------------------------------------------------------------ data
   const byRequest = useMemo(() => new Map(plan?.assignments.map((a) => [a.request_id, a]) ?? []), [plan]);
@@ -405,6 +433,46 @@ export function MapView(props: Props) {
           </g>
         ))}
 
+        {/* 1 km graticule; heavy lines every 5 km carry kilometre labels */}
+        {grid && (
+          <g pointerEvents="none" aria-hidden="true">
+            {(() => {
+              const lines = (lo: number, hi: number) => {
+                const out: number[] = [];
+                for (let k = Math.ceil(lo / 1000) * 1000; k <= hi; k += 1000) out.push(k);
+                return out;
+              };
+              const major = (k: number) => Math.round(k / 1000) % 5 === 0;
+              return (
+                <>
+                  {lines(v.cx - (size.w / 2) * v.mpp, v.cx + (size.w / 2) * v.mpp).map((k) => (
+                    <line key={`v${k}`} x1={sx(k)} y1={0} x2={sx(k)} y2={size.h} stroke={palette.blue} strokeWidth={major(k) ? 1.1 : 0.6} opacity={major(k) ? 0.38 : 0.15} />
+                  ))}
+                  {lines(v.cy - (size.h / 2) * v.mpp, v.cy + (size.h / 2) * v.mpp).map((k) => (
+                    <line key={`h${k}`} x1={0} y1={sy(k)} x2={size.w} y2={sy(k)} stroke={palette.blue} strokeWidth={major(k) ? 1.1 : 0.6} opacity={major(k) ? 0.38 : 0.15} />
+                  ))}
+                  {lines(v.cx - (size.w / 2) * v.mpp, v.cx + (size.w / 2) * v.mpp)
+                    .filter(major)
+                    .filter((k) => sx(k) > 16 && sx(k) < size.w - 90)
+                    .map((k) => (
+                      <text key={`vl${k}`} x={sx(k) + 4} y={size.h - 5} className="pmap-grid-label">
+                        {k / 1000}E
+                      </text>
+                    ))}
+                  {lines(v.cy - (size.h / 2) * v.mpp, v.cy + (size.h / 2) * v.mpp)
+                    .filter(major)
+                    .filter((k) => sy(k) > 60 && sy(k) < size.h - 16)
+                    .map((k) => (
+                      <text key={`hl${k}`} x={size.w - 32} y={sy(k) - 3} textAnchor="end" className="pmap-grid-label">
+                        {k / 1000}N
+                      </text>
+                    ))}
+                </>
+              );
+            })()}
+          </g>
+        )}
+
         {/* routes of the plan */}
         {plan?.assignments.map((a) => {
           if (!a.mode) return null;
@@ -446,7 +514,16 @@ export function MapView(props: Props) {
         {scenario.risk.sites.map((s) => {
           const [x, y] = posOf("site", s.id, s.x, s.y);
           return (
-            <g key={s.id} data-drag="site" data-id={s.id} className="pmap-handle">
+            <g
+              key={s.id}
+              data-drag="site"
+              data-id={s.id}
+              className="pmap-handle"
+              tabIndex={0}
+              role="button"
+              aria-label={`${s.name} observed area, range ${fmt(s.range, 0)} m. Use arrow keys to move, Shift and arrow keys for coarse moves.`}
+              onKeyDown={(ev) => markerKeys("site", s.id, x, y)(ev)}
+            >
               <circle cx={sx(x)} cy={sy(y)} r={s.range / v.mpp} fill="none" stroke={palette.critical} strokeWidth={1} strokeDasharray="3 4" opacity={0.8} />
               <path d={`M${sx(x)},${sy(y) - 7} L${sx(x) + 6.5},${sy(y) + 5} L${sx(x) - 6.5},${sy(y) + 5} Z`} fill={palette.critical} stroke={palette.surface} strokeWidth={1.5} />
             </g>
@@ -454,7 +531,15 @@ export function MapView(props: Props) {
         })}
 
         {/* depot */}
-        <g data-drag="depot" data-id="depot" className="pmap-handle">
+        <g
+          data-drag="depot"
+          data-id="depot"
+          className="pmap-handle"
+          tabIndex={0}
+          role="button"
+          aria-label={`Depot ${scenario.depot.name}. Use arrow keys to move, Shift and arrow keys for coarse moves.`}
+          onKeyDown={(ev) => markerKeys("depot", "depot", depot[0], depot[1])(ev)}
+        >
           <rect x={sx(depot[0]) - 7} y={sy(depot[1]) - 7} width={14} height={14} fill={palette.text} stroke={palette.surface} strokeWidth={2} />
         </g>
 
@@ -465,8 +550,18 @@ export function MapView(props: Props) {
           const on = r.id === selected;
           const served = !!a?.mode;
           const late = a && served && !a.on_time;
+          const name = `${r.id} ${r.name}, ${fmt(r.demand_kg, 0)} kg, ${r.priority} priority`;
           return (
-            <g key={r.id} data-drag="request" data-id={r.id} className="pmap-handle">
+            <g
+              key={r.id}
+              data-drag="request"
+              data-id={r.id}
+              className="pmap-handle"
+              tabIndex={0}
+              role="button"
+              aria-label={`${name}. Use arrow keys to move, Enter to open details, Shift and arrow keys for coarse moves.`}
+              onKeyDown={(ev) => markerKeys("request", r.id, x, y, () => props.onSelect(r.id))(ev)}
+            >
               {on && <circle cx={sx(x)} cy={sy(y)} r={16} fill="none" stroke={palette.text} strokeWidth={2} />}
               <circle
                 cx={sx(x)}
@@ -510,6 +605,12 @@ export function MapView(props: Props) {
           </text>
         </g>
       </svg>
+
+      {satFailed && baseLayer === "satellite" && (
+        <div className="pmap-note" role="status">
+          Satellite imagery failed to load; terrain relief is shown instead. Check the connection and switch layers.
+        </div>
+      )}
 
       <div className="pmap-foot">
         <div className="pmap-readout num" ref={readout}>

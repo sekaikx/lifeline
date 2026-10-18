@@ -14,7 +14,9 @@ use lifeline_geodata::{
 };
 use lifeline_planner::{LayerCache, Plan, PlanResult, PlanScenario, RiskLayers, World, WorldSpec};
 use lifeline_supply::{Allocation, ImportReport, Inventory, Item, Location, Snapshot, Tx, TxDraft};
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
@@ -86,6 +88,17 @@ impl Data {
 }
 
 type Shared<'a> = State<'a, Arc<Data>>;
+
+/// Mirrors `src/plan/types.ts::PlaceCandidate` so the geocode command can
+/// return candidates to the UI.
+#[derive(Clone, Debug, serde::Serialize)]
+struct PlaceCandidate {
+    name: String,
+    lat: f64,
+    lon: f64,
+    display_name: String,
+    r#type: String,
+}
 
 /// Run `f` with the shared data on the blocking pool.
 async fn blocking<T, F>(data: &Shared<'_>, f: F) -> Result<T, String>
@@ -200,6 +213,64 @@ async fn wind_forecast(
 async fn imagery(data: Shared<'_>, area: Area) -> Result<Imagery, String> {
     blocking(&data, move |d| {
         lifeline_geodata::imagery(&d.fetcher, &area, 1024)
+    })
+    .await
+}
+
+/// Search place names with OpenStreetMap Nominatim. Results are cached for a
+/// day so repeated lookups do not hit the network. Nominatim asks for one
+/// request per second; keep that in mind when testing.
+#[tauri::command]
+async fn geocode(data: Shared<'_>, query: String) -> Result<Vec<PlaceCandidate>, String> {
+    let query = query.trim().to_string();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    blocking(&data, move |d| {
+        let encoded = urlencoding::encode(&query);
+        let url = format!(
+            "https://nominatim.openstreetmap.org/search?format=json&limit=10&accept-language=en&q={encoded}"
+        );
+        let bytes = d.fetcher.get(&url, Some(Duration::from_secs(24 * 60 * 60)))?;
+        let v: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        let arr = v.as_array().ok_or_else(|| "nominatim did not return a list".to_string())?;
+        let mut out = Vec::with_capacity(arr.len());
+        for m in arr {
+            let name = m
+                .get("display_name")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            if name.is_empty() {
+                continue;
+            }
+            let lat = m
+                .get("lat")
+                .and_then(Value::as_str)
+                .and_then(|s| s.parse::<f64>().ok())
+                .ok_or_else(|| format!("nominatim result {name} has no lat"))?;
+            let lon = m
+                .get("lon")
+                .and_then(Value::as_str)
+                .and_then(|s| s.parse::<f64>().ok())
+                .ok_or_else(|| format!("nominatim result {name} has no lon"))?;
+            let osm_type = m.get("osm_type").and_then(Value::as_str).unwrap_or("");
+            let osm_class = m.get("class").and_then(Value::as_str).unwrap_or("");
+            let typ = if osm_class.is_empty() {
+                osm_type.to_string()
+            } else {
+                format!("{osm_class}/{osm_type}")
+            };
+            let display_name = name.clone();
+            out.push(PlaceCandidate {
+                name,
+                lat,
+                lon,
+                display_name,
+                r#type: typ,
+            });
+        }
+        Ok(out)
     })
     .await
 }
@@ -597,6 +668,7 @@ pub fn run() {
             risk_layers,
             wind_forecast,
             imagery,
+            geocode,
             list_scenes,
             scene_image,
             compare_scenes,

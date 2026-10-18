@@ -158,6 +158,14 @@ export interface Imagery {
 
 export type WaterDetector = "index" | "model";
 
+export interface PlaceCandidate {
+  name: string;
+  lat: number;
+  lon: number;
+  display_name: string;
+  type: string;
+}
+
 export interface WaterDetection {
   mask: CellMask;
   scenes: Scene[];

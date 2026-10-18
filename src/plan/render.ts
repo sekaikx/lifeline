@@ -9,8 +9,16 @@ const hex = (c: string): [number, number, number] => {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 };
 
-const mix = (a: [number, number, number], b: [number, number, number], t: number) =>
-  [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t] as const;
+/** Piecewise-linear interpolation along a colour ramp, t clamped to 0..1. */
+function rampColor(stops: [number, [number, number, number]][], t: number): [number, number, number] {
+  const x = Math.min(Math.max(t, 0), 1);
+  for (let i = 1; i < stops.length; i++) {
+    const [tp, p] = stops[i];
+    const [tn, n] = stops[i - 1];
+    if (x <= tp) return [n[0] + (p[0] - n[0]) * ((x - tn) / (tp - tn || 1)), n[1] + (p[1] - n[1]) * ((x - tn) / (tp - tn || 1)), n[2] + (p[2] - n[2]) * ((x - tn) / (tp - tn || 1))];
+  }
+  return stops[stops.length - 1][1];
+}
 
 /** Bilinear height at fractional grid coordinates. */
 function heightAt(t: TerrainGrid, fx: number, fy: number): number {
@@ -23,22 +31,55 @@ function heightAt(t: TerrainGrid, fx: number, fy: number): number {
 }
 
 export interface ReliefStyle {
-  low: string;
-  high: string;
+  /** Hypsometric stops: [elevation fraction colour] from low ground to peaks */
+  stops: [number, string][];
   contour: string;
   /** Contour interval [m]; every fifth line is drawn heavier */
   interval: number;
 }
 
+/** Valley floor to ridgeline, in one blended cartographic ramp per theme. */
 export const reliefStyle = (mode: "light" | "dark"): ReliefStyle =>
   mode === "light"
-    ? { low: "#eef0e8", high: "#d6cdb8", contour: "#8c8371", interval: 25 }
-    : { low: "#1c1f1b", high: "#3a362e", contour: "#a59c86", interval: 25 };
+    ? {
+        stops: [
+          [0.0, "#456b52"],
+          [0.2, "#6d7d52"],
+          [0.4, "#a08f5e"],
+          [0.6, "#c0a877"],
+          [0.8, "#a3907a"],
+          [1.0, "#e9e6dc"],
+        ],
+        contour: "#756a55",
+        interval: 25,
+      }
+    : {
+        stops: [
+          [0.0, "#131e26"],
+          [0.2, "#1b333c"],
+          [0.4, "#2f4f4f"],
+          [0.6, "#54685c"],
+          [0.8, "#7d8474"],
+          [1.0, "#c3bfae"],
+        ],
+        contour: "#93a89a",
+        interval: 25,
+      };
+
+/** The same ramp as a CSS gradient, for the small legend bar. */
+export function hypsometricGradient(mode: "light" | "dark"): { css: string; n: number } {
+  const s = reliefStyle(mode).stops;
+  return {
+    css: `linear-gradient(to right, ${s.map(([p, c]) => `${c} ${Math.round(p * 100)}%`).join(", ")})`,
+    n: s.length,
+  };
+}
 
 /**
- * Shaded relief: elevation tint, multiplied by Lambertian hillshade from the
- * north-west (the cartographic convention), with contour lines where the
- * contour index changes between neighbouring pixels.
+ * Shaded relief: hypsometric tint over a two-light hillshade (north-west key
+ * light per cartographic convention, with a soft east fill so lee slopes read
+ * instead of vanishing), with contour lines where the contour index changes
+ * between neighbouring pixels.
  */
 export function renderRelief(t: TerrainGrid, style: ReliefStyle, scale = 4): HTMLCanvasElement {
   const w = (t.nx - 1) * scale + 1;
@@ -60,13 +101,13 @@ export function renderRelief(t: TerrainGrid, style: ReliefStyle, scale = 4): HTM
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
     }
-
-  const low = hex(style.low);
-  const high = hex(style.high);
+  const span = hi - lo || 1;
+  const stops: [number, [number, number, number]][] = style.stops.map(([p, c]) => [p, hex(c)]);
   const ink = hex(style.contour);
   const cell = t.dx / scale;
-  // light from the north-west, 45 degrees up
-  const [lx, ly, lz] = [-Math.SQRT1_2 * Math.SQRT1_2, Math.SQRT1_2 * Math.SQRT1_2, Math.SQRT1_2];
+  // key light north-west at 45 degrees, fill from the east, both 45 degrees up
+  const [kx, ky, kz] = [-0.5, 0.5, Math.SQRT1_2];
+  const [fx, fy, fz] = [1, 0, Math.SQRT1_2];
   const band = (v: number, step: number) => Math.floor(v / step);
 
   for (let py = 0; py < h; py++)
@@ -80,11 +121,12 @@ export function renderRelief(t: TerrainGrid, style: ReliefStyle, scale = 4): HTM
       const dzdx = (zr - zl) / (2 * cell);
       const dzdy = (zu - zd) / (2 * cell);
       const n = Math.hypot(dzdx, dzdy, 1);
-      const shade = Math.max(0, (-dzdx * lx - dzdy * ly + lz) / n);
-      const lambert = 0.55 + 0.45 * Math.min(1, shade / lz);
+      const key = Math.max(0, (-dzdx * kx - dzdy * ky + kz) / n);
+      const fill = Math.max(0, (-dzdx * fx - dzdy * fy + fz) / n);
+      const lambert = 0.5 + 0.5 * Math.min(1, (0.72 * (key / kz) + 0.28 * (fill / fz)) / 1.001);
 
-      const [r, g, b] = mix(low, high, (z[k] - lo) / (hi - lo || 1));
-      let col = [r * lambert, g * lambert, b * lambert];
+      let col = rampColor(stops, (z[k] - lo) / span);
+      col = [col[0] * lambert, col[1] * lambert, col[2] * lambert];
 
       // contours: pixel sits on a line if a neighbour is in a lower band
       const c = band(z[k], style.interval);

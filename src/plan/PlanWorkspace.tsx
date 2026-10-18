@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Segmented } from "../components/Field";
 import { api, errorText } from "../lib/api";
+import { fmt } from "../lib/format";
 import type { Palette, ThemeMode } from "../lib/theme";
 import { MapView, modeColor, type BaseLayer, type Placing, type RiskLayer } from "./MapView";
 import { PlanPanel } from "./PlanPanel";
 import { accessNote, stagingSuggestions, truckFeasibility } from "./access";
 import { floodSummary, SetupPanel, type DataActions } from "./SetupPanel";
+import { hypsometricGradient } from "./render";
 import { Timeline } from "./Timeline";
 import type { SatelliteChoice, SceneImage } from "../intel/types";
 import type { Item } from "../supply/types";
@@ -84,6 +86,7 @@ export function PlanWorkspace({
   const [placing, setPlacing] = useState<Placing>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [baseLayer, setBaseLayer] = useState<BaseLayer>("relief");
+  const [opsGrid, setOpsGrid] = useState(false);
   const [imagery, setImagery] = useState<{ key: string; data: SceneImage } | null>(null);
   const [flood, setFlood] = useState<string | null>(null);
   const [waterModel, setWaterModel] = useState<string | null>(null);
@@ -98,21 +101,29 @@ export function PlanWorkspace({
       .catch(() => setWaterModel(null));
   }, []);
 
+  const loadGen = useRef(0);
+  const actionGen = useRef(0);
   const loadArea = useCallback((area: Area | null) => {
+    const id = ++loadGen.current;
     setBusy(area ? `Loading ${area.name}…` : "Generating terrain…");
     setError(null);
     onStatus(area ? `Downloading elevation and OpenStreetMap data for ${area.name}` : "");
     api
       .examplePlan(area)
       .then((s) => {
+        if (id !== loadGen.current) return;
         setScenario(s);
         setSelected(null);
         setFlood(null);
         setPreFloodTruck(null);
         if (!area) setBaseLayer("relief");
       })
-      .catch((e) => setError(errorText(e)))
-      .finally(() => setBusy(null));
+      .catch((e) => {
+        if (id === loadGen.current) setError(errorText(e));
+      })
+      .finally(() => {
+        if (id === loadGen.current) setBusy(null);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const reset = useCallback(() => loadArea(areaOf(scenario)), [loadArea, scenario]);
@@ -123,23 +134,25 @@ export function PlanWorkspace({
   }, [scenario, busy, error, loadArea]);
 
   const update = useCallback((fn: (s: PlanScenario) => PlanScenario) => setScenario((s) => (s ? fn(s) : s)), []);
-  handle.current = {
-    scenario,
-    setScenario: (s) => {
-      setScenario(s);
-      setSelected(null);
-      setPreFloodTruck(null);
-      setFlood(null);
-    },
-    reset,
-    update,
-    addRequest: (r) => {
-      const id = nextId("R", scenario?.requests.map((q) => q.id) ?? []);
-      update((s) => ({ ...s, requests: [...s.requests, { ...r, id }] }));
-      setSelected(id);
-      return id;
-    },
-  };
+  useEffect(() => {
+    handle.current = {
+      scenario,
+      setScenario: (s) => {
+        setScenario(s);
+        setSelected(null);
+        setPreFloodTruck(null);
+        setFlood(null);
+      },
+      reset,
+      update,
+      addRequest: (r) => {
+        const id = nextId("R", scenario?.requests.map((q) => q.id) ?? []);
+        update((s) => ({ ...s, requests: [...s.requests, { ...r, id }] }));
+        setSelected(id);
+        return id;
+      },
+    };
+  });
 
   // keep the last scenario across restarts; written when edits pause, since
   // serialising a large scenario on every drag step is what made edits stutter
@@ -233,6 +246,18 @@ export function PlanWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario, plan, world]);
 
+  const elevationRange = useMemo(() => {
+    if (!world) return null;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const x of world.terrain.heights) {
+      if (x < lo) lo = x;
+      if (x > hi) hi = x;
+    }
+    return [lo, hi] as const;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world]);
+
   if (!scenario || !world) {
     return (
       <div className="empty">
@@ -273,26 +298,34 @@ export function PlanWorkspace({
     accessNote: stagingNote,
     forecast: (provider, hours) => {
       if (!area) return;
+      const id = ++actionGen.current;
       setBusy("Fetching forecast…");
       api
         .windForecast(area, provider, hours)
-        .then((f) =>
+        .then((f) => {
+          if (id !== actionGen.current) return;
           update((x) => ({
             ...x,
             weather: { ...x.weather, wind: f.wind, source: `${f.source}, valid ${new Date(f.valid_unix * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC` },
-          })),
-        )
-        .catch((e) => setError(errorText(e)))
-        .finally(() => setBusy(null));
+          }));
+        })
+        .catch((e) => {
+          if (id === actionGen.current) setError(errorText(e));
+        })
+        .finally(() => {
+          if (id === actionGen.current) setBusy(null);
+        });
     },
     detectFlooding: (date, detector) => {
       if (!area) return;
+      const id = ++actionGen.current;
       setBusy("Analysing Sentinel-2…");
       setPreFloodTruck(truckFeasibility(plan));
       const asOf = date ? Math.round(Date.parse(`${date}T12:00:00Z`) / 1000) : null;
       api
         .detectFlooding(area, asOf, detector)
         .then((d) => {
+          if (id !== actionGen.current) return;
           const dates = [...new Set(d.scenes.map((x) => x.date))].join(", ");
           setFlood(floodSummary(d.new_water_fraction, d.obscured_fraction, d.scenes, d.detector));
           update((x) => ({
@@ -308,8 +341,12 @@ export function PlanWorkspace({
             },
           }));
         })
-        .catch((e) => setError(errorText(e)))
-        .finally(() => setBusy(null));
+        .catch((e) => {
+          if (id === actionGen.current) setError(errorText(e));
+        })
+        .finally(() => {
+          if (id === actionGen.current) setBusy(null);
+        });
     },
   };
 
@@ -373,6 +410,7 @@ export function PlanWorkspace({
             onPlace={place}
             onMove={move}
             keyHeight={area ? 146 : 78}
+            grid={opsGrid}
             baseLayer={area ? baseLayer : "relief"}
             imagery={imagery?.key === areaKey ? imagery.data : null}
           />
@@ -388,6 +426,15 @@ export function PlanWorkspace({
                     { value: "satellite", label: "Satellite" },
                   ]}
                   onChange={setBaseLayer}
+                />
+                <Segmented
+                  ariaLabel="Tactical grid"
+                  value={opsGrid ? "on" : "off"}
+                  options={[
+                    { value: "off", label: "Grid off" },
+                    { value: "on", label: "1 km grid" },
+                  ]}
+                  onChange={(v) => setOpsGrid(v === "on")}
                 />
               </div>
             )}
@@ -419,13 +466,24 @@ export function PlanWorkspace({
                     <button
                       key={f}
                       type="button"
+                      disabled={!!busy}
                       title={f === "cot" ? "Cursor-on-Target events for ATAK, WinTAK and iTAK" : f === "kml" ? "Google Earth, ATAK, QGIS" : "QGIS, ArcGIS, web maps"}
-                      onClick={() =>
+                      onClick={() => {
+                        const id = ++actionGen.current;
+                        setBusy(`Exporting ${label}…`);
                         api
                           .exportPlan(scenario, plan, f)
-                          .then((path) => path && onStatus(`Exported ${path}`))
-                          .catch((e) => setError(errorText(e)))
-                      }
+                          .then((path) => {
+                            if (id !== actionGen.current) return;
+                            onStatus(`Exported ${path}`);
+                          })
+                          .catch((e) => {
+                            if (id === actionGen.current) setError(errorText(e));
+                          })
+                          .finally(() => {
+                            if (id === actionGen.current) setBusy(null);
+                          });
+                      }}
                     >
                       {label}
                     </button>
@@ -450,6 +508,12 @@ export function PlanWorkspace({
                 <span className="swatch" style={{ background: palette.critical, opacity: 0.45 }} />
                 In view of a risk
               </span>
+              {elevationRange && (
+                <span>
+                  <span className="elev-bar" style={{ background: hypsometricGradient(theme).css }} />
+                  {fmt(Math.floor(elevationRange[0] / 100) * 100, 0)}–{fmt(Math.ceil(elevationRange[1] / 100) * 100, 0)} m
+                </span>
+              )}
             </div>
           </div>
         </div>

@@ -25,6 +25,7 @@ import type {
   Plan,
   PlanResult,
   PlanScenario,
+  PlaceCandidate,
   RiskLayers,
   WaterDetection,
   WaterDetector,
@@ -53,6 +54,7 @@ export const api = {
   windForecast: (area: Area, provider: WindProvider, hours: number) =>
     invoke<WindForecast>("wind_forecast", { area, provider, hours }),
   imagery: (area: Area) => invoke<Imagery>("imagery", { area }),
+  geocode: (q: string) => invoke<PlaceCandidate[]>("geocode", { q }),
   waterDetectors: () => invoke<WaterDetectors>("water_detectors"),
   detectFlooding: (area: Area, asOf: number | null, detector: WaterDetector) =>
     invoke<WaterDetection>("detect_flooding", { area, asOf, detector }),
@@ -108,5 +110,17 @@ export const api = {
     invoke<string | null>("save_text", { defaultName, extension, contents }),
 };
 
-export const errorText = (e: unknown): string =>
-  typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
+export const errorText = (e: unknown): string => {
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const fields = e as Record<string, unknown>;
+    for (const key of ["message", "detail", "reason", "data"])
+      if (typeof fields[key] === "string") return fields[key] as string;
+    const parts = Object.entries(fields)
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => `${k}: ${String(v)}`);
+    if (parts.length) return parts.join(" · ");
+  }
+  return String(e);
+};

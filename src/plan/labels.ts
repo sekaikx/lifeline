@@ -48,6 +48,9 @@ function textWidth(text: string, font: string): number {
     w = measureCtx.measureText(text).width;
   }
   widths.set(k, w);
+  // a long session can accumulate thousands of distinct strings; drop the cache
+  // before it grows without bound
+  if (widths.size >= 512) widths.clear();
   return w;
 }
 
